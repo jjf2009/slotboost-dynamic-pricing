@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚡ SlotBoost: Dynamic Pricing for Service Professionals
 
-## Getting Started
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-blue?style=flat-square&logo=react)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.0-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
 
-First, run the development server:
+**SlotBoost** is an intelligent booking platform that transforms empty slots into revenue machines. Using time-sensitive, dynamic pricing, it helps service professionals fill last-minute appointments while offering clients exclusive deals.
 
+---
+
+## ✨ Features
+
+### 🚀 Revenue Optimization
+- **Lead-Time Discounts**: Automatically applies discounts (up to 25%) as slots approach their start time.
+- **Peak/Off-Peak Heatmaps**: Configure a 7×24 demand index to adjust prices based on your busiest and slowest hours.
+- **Smart D_max Cap**: Total control over your pricing floor. SlotBoost never discounts below your defined limit.
+
+### 🔄 Intelligent Automation
+- **Cancellation Recovery**: Instant flash deal alerts (e.g., 15% off for 10 minutes) to fill sudden openings.
+- **Waitlist Autopilot**: Automatically notifies waitlisted clients via SMS/WhatsApp when a slot becomes available.
+- **Live Price Updates**: Real-time pricing engine that adjusts as time passes.
+
+### 🛠 Professional Tools
+- **Slot Management**: Easy-to-use dashboard to add availability and set base prices.
+- **Client Booking**: A seamless, mobile-first booking experience for your clients.
+- **Notifications**: Integrated SMS and WhatsApp alerts for appointments and deals.
+
+---
+
+## 🛠 Tech Stack
+
+- **Frontend**: [Next.js 15](https://nextjs.org/) (App Router), [React 19](https://react.dev/)
+- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/), [Shadcn UI](https://ui.shadcn.com/)
+- **Backend/Auth**: [Supabase SSR](https://supabase.com/docs/guides/auth/server-side-rendering)
+- **Database**: [PostgreSQL](https://www.postgresql.org/) (via Supabase & [Neon](https://neon.tech/))
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Data Fetching**: [TanStack Query v5](https://tanstack.com/query/latest)
+- **Icons**: [Phosphor Icons](https://phosphoricons.com/)
+- **Validation**: [Zod](https://zod.dev/)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/jjf2009/SlotBoost.git
+cd SlotBoost
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Install dependencies
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Set up Environment Variables
+Create a `.env.local` file in the root directory and add your credentials:
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Twilio (Notifications)
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=your_twilio_number
+TWILIO_WHATSAPP_NUMBER=whatsapp:your_whatsapp_number
 
-## Learn More
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+CRON_SECRET=your_generated_cron_secret
+```
 
-To learn more about Next.js, take a look at the following resources:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Run the development server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 📁 Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+├── app/                # Next.js App Router (Routes & Pages)
+│   ├── (auth)/         # Authentication flow
+│   ├── api/            # Backend API routes
+│   ├── professional/   # Professional dashboard
+│   ├── book/           # Client booking flow
+│   └── waitlist/       # Waitlist management
+├── components/         # Reusable UI components
+│   └── ui/             # Shadcn UI primitives
+├── hooks/              # Custom React hooks
+├── lib/                # Utility functions & shared logic
+├── store/              # Zustand state stores
+├── types/              # TypeScript definitions
+└── public/             # Static assets
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🚢 Deployment
+
+The easiest way to deploy is using the [Vercel Platform](https://vercel.com/new).
+
+1. Connect your GitHub repository to Vercel.
+2. Configure the environment variables in the Vercel dashboard.
+3. Deploy!
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  Built with ❤️ by the SlotBoost Team
+</p>

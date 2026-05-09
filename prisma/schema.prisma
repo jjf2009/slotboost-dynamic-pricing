@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String        @id @default(uuid())
+  name          String
+  email         String        @unique
+  password_hash String
+  created_at    DateTime      @default(now())
+  applications  Application[]
+
+  @@map("users")
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  company     String
+  role        String
+  status      ApplicationStatus @default(APPLIED)
+  method      ApplicationMethod @default(COLD_EMAIL)
+  appliedDate DateTime          @default(now()) @map("applied_date")
+  notes       String?
+  userId      String            @map("user_id")
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("applications")
+}
+
+enum ApplicationStatus {
+  APPLIED
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+enum ApplicationMethod {
+  COLD_EMAIL     @map("COLD EMAIL")
+  OFFICIAL_MEANS @map("OFFICAL MEANS")
+}

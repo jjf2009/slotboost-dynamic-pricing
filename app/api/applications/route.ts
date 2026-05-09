@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserFromRequest } from "@/lib/getUser";
 import { ApplicationService } from "@/lib/services/application.service";
+import { ApplicationStatus, ApplicationMethod } from "@prisma/client";
+
 export const createApplicationSchema = z.object({
   company: z.string().min(1, { message: "Company is required" }),
 
   role: z.string().min(1, { message: "Role is required" }),
 
-  status: z.enum(["APPLIED", "INTERVIEW", "OFFER", "REJECTED"]),
+  status: z.nativeEnum(ApplicationStatus),
 
-  method: z.enum(["COLD EMAIL", "OFFICAL MEANS"]),
+  method: z.nativeEnum(ApplicationMethod),
 
   appliedDate: z.string().datetime({
     message: "Invalid date format",

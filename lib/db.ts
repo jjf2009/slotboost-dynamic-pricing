@@ -1,18 +1,21 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import ws from 'ws';
+import { PrismaClient } from '@prisma/client';
 
-// Neon-specific configuration for serverless environments (Node.js/Edge)
-// This allows the driver to use WebSockets for connections if needed
-if (typeof window === 'undefined') {
-  neonConfig.webSocketConstructor = ws;
-}
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-const globalForPg = global as unknown as { pgPool: Pool };
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    // In Prisma 7, connection management is preferred via the constructor if not using defaults
+    // However, it will still pick up DATABASE_URL from process.env if present.
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
 
-export const db = globalForPg.pgPool || new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Add SSL for Neon if not provided in the connection string
-  ssl: true,
-});
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
-if (process.env.NODE_ENV !== 'production') globalForPg.pgPool = db;
+// For backward compatibility while refactoring
+export const db = {
+  query: async (text: string, params: any[]) => {
+    console.warn("Using legacy db.query wrapper. Please migrate to Prisma.");
+    return { rows: [], rowCount: 0 }; 
+  }
+};

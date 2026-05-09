@@ -1,10 +1,11 @@
+import { ApplicationStatus, ApplicationMethod } from "@prisma/client";
 import { ApplicationModel } from "../models/application.model";
 
 export interface CreateApplicationInput {
   company: string;
   role: string;
-  status: "APPLIED" | "INTERVIEW" | "OFFER" | "REJECTED";
-  method: "COLD EMAIL" | "OFFICAL MEANS";
+  status: ApplicationStatus;
+  method: ApplicationMethod;
   appliedDate: string;
   notes?: string;
 }

@@ -8,6 +8,9 @@ const registerSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters' }),
   email: z.string().email({ message: "Invalid email" }),
   password: z.string().min(8, 'Password must be at least 8 characters long'),
+  phone: z.string().optional(),
+  role: z.enum(["professional", "client"]),
+  serviceType: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -28,10 +31,21 @@ export async function POST(req: Request) {
     const { user, token } = await AuthService.registerUser(validatedData.data);
 
     // 5. Controller Responsibility: Return HTTP Response Success
-    return NextResponse.json(
+    const response = NextResponse.json(
       { message: 'User registered successfully', user, token },
       { status: StatusCodes.CREATED } // Status 201
     );
+
+    // Set the cookie
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 50, // 50 days
+      path: "/",
+    });
+
+    return response;
 
   } catch (error: any) {
     // 6. Controller Responsibility: Formatting HTTP Errors gracefully

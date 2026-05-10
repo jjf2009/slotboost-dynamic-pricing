@@ -1,14 +1,16 @@
-import "dotenv/config";
-import { defineConfig } from "prisma/config";
+import { defineConfig } from '@prisma/config';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export default defineConfig({
-  schema: "prisma/schema.prisma",
+  earlyAccess: true,
   migrations: {
-    path: "prisma/migrations",
+    schemaPath: 'prisma/schema.prisma',
+  },
+  studio: {
+    port: 5555,
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
-    // @ts-ignore - Prisma 7 uses this for migrations/pushes
-    directUrl: process.env["DIRECT_URL"],
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL,
   },
 });

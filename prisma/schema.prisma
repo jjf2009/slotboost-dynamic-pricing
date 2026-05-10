@@ -13,8 +13,61 @@ model User {
   password_hash String
   created_at    DateTime      @default(now())
   applications  Application[]
+  professional  Professional?
 
   @@map("users")
+}
+
+model Professional {
+  id         String    @id @default(uuid())
+  userId     String    @unique @map("user_id")
+  user       User      @relation(fields: [userId], references: [id])
+  name       String
+  base_price Float     @default(500)
+  d_max      Float     @default(0.5) // Max discount
+  slots      Slot[]
+  bookings   Booking[]
+
+  @@map("professionals")
+}
+
+model Slot {
+  id                  String    @id @default(uuid())
+  professionalId      String    @map("professional_id")
+  professional        Professional @relation(fields: [professionalId], references: [id])
+  start_time          DateTime
+  duration_mins       Int       @default(60)
+  demand_index        Float     @default(1.0)
+  d_cancel_active     Boolean   @default(false)
+  d_cancel_expires_at DateTime?
+  status              String    @default("available") // available, booked
+  bookings            Booking[]
+
+  @@map("slots")
+}
+
+model Booking {
+  id             String       @id @default(uuid())
+  slotId         String       @map("slot_id")
+  slot           Slot         @relation(fields: [slotId], references: [id])
+  professionalId String       @map("professional_id")
+  professional   Professional @relation(fields: [professionalId], references: [id])
+  clientId       String?      @map("client_id")
+  client         Client?      @relation(fields: [clientId], references: [id])
+  price_paid     Float
+  status         String       @default("confirmed")
+  booked_at      DateTime     @default(now())
+
+  @@map("bookings")
+}
+
+model Client {
+  id       String    @id @default(uuid())
+  name     String
+  email    String    @unique
+  bookings Booking[]
+
+  @@map("clients")
 }
 
 model Application {
@@ -26,7 +79,7 @@ model Application {
   appliedDate DateTime          @default(now()) @map("applied_date")
   notes       String?
   userId      String            @map("user_id")
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [id], references: [id], onDelete: Cascade)
 
   @@map("applications")
 }

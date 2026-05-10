@@ -20,10 +20,21 @@ export async function POST(req:Request){
         }
     const {user, token} = await AuthService.loginUser(validatedData.data);
 
-        return NextResponse.json(
-            { message: 'Login successful', user, token },
-            { status: StatusCodes.OK }
-        );
+    const response = NextResponse.json(
+      { message: 'Login successful', user, token },
+      { status: StatusCodes.OK }
+    );
+
+    // Set the cookie
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 50, // 50 days
+      path: "/",
+    });
+
+    return response;
 
     }catch(error:any){
         console.error('Registration Error:', error);

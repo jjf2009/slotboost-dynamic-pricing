@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,70 +18,39 @@ export default function RegisterPage() {
   const [serviceType, setServiceType] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // 1. Sign up with Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name, phone, role },
-      },
-    });
+    try {
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          password,
+          role,
+          serviceType,
+        }),
+      });
 
-    if (authError) {
-      toast.error(authError.message);
-      setLoading(false);
-      return;
-    }
+      const data = await response.json();
 
-    // 2. Create profile in the appropriate table
-    if (authData.user) {
-      if (role === "professional") {
-        const { error: profError } = await supabase
-          .from("professionals")
-          .insert({
-            user_id: authData.user.id,
-            name,
-            email,
-            phone,
-            service_type: serviceType || "General",
-            base_price: 500,
-            d_max: 0.4,
-          });
-
-        if (profError) {
-          console.error("Profile creation error:", profError);
-          toast.error("Account created but profile setup failed. Please contact support.");
-          setLoading(false);
-          return;
-        }
-      } else {
-        const { error: clientError } = await supabase
-          .from("clients")
-          .insert({
-            user_id: authData.user.id,
-            name,
-            email,
-            phone,
-          });
-
-        if (clientError) {
-          console.error("Profile creation error:", clientError);
-          toast.error("Account created but profile setup failed. Please contact support.");
-          setLoading(false);
-          return;
-        }
+      if (!response.ok) {
+        throw new Error(data.message || "Registration failed");
       }
-    }
 
-    toast.success("Account created! Welcome to SlotBoost.");
-    router.push(role === "professional" ? "/professional/dashboard" : "/");
-    router.refresh();
+      toast.success("Account created! Welcome to SlotBoost.");
+      router.push(role === "professional" ? "/professional/dashboard" : "/");
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -171,7 +139,7 @@ export default function RegisterPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={8}
             className="h-12 rounded-xl"
           />
         </div>

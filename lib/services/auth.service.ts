@@ -1,12 +1,16 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { UserModel } from '../models/user.model';
+import { prisma } from '../db';
 
 // Input DTO matching our Zod schema
 export interface RegisterInput {
   name: string;
   email: string;
   password: string;
+  phone?: string;
+  role: "professional" | "client";
+  serviceType?: string;
 }
 
 export interface LoginInput {
@@ -16,12 +20,11 @@ export interface LoginInput {
 
 export class AuthService {
   static async registerUser(input: RegisterInput) {
-    const { name, email, password } = input;
+    const { name, email, password, phone, role, serviceType } = input;
 
     // 1. Business Logic: Enforce unique constraint
     const existingUser = await UserModel.findByEmail(email);
     if (existingUser) {
-      // Throw an error safely for the controller to catch
       throw new Error('USER_ALREADY_EXISTS');
     }
 
@@ -32,13 +35,31 @@ export class AuthService {
     // 3. Command Model to persist data
     const newUser = await UserModel.create(name, email, passwordHash);
 
-    // 4. Generate JWT Token
-    // In production, ensure process.env.JWT_SECRET is set securely.
+    // 4. Create Profile (Professional or Client)
+    if (role === "professional") {
+      await prisma.professional.create({
+        data: {
+          userId: newUser.id,
+          name: name,
+          base_price: 500, // Default values
+          d_max: 0.4,
+        }
+      });
+    } else {
+      await prisma.client.create({
+        data: {
+          name: name,
+          email: email,
+        }
+      });
+    }
+
+    // 5. Generate JWT Token
     const jwtSecret = process.env.JWT_SECRET || 'fallback_secret_for_development';
     const token = jwt.sign(
       { userId: newUser.id, email: newUser.email },
       jwtSecret,
-      { expiresIn: '50d' } // Token expires in 50 days
+      { expiresIn: '50d' }
     );
 
     return { user: newUser, token };

@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { calculatePrice } from "@/lib/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,45 +13,55 @@ import {
   ChartLineUp,
   Users,
 } from "@phosphor-icons/react/dist/ssr";
+import { getUserFromRequest } from "@/lib/getUser";
+import { prisma } from "@/lib/db";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userPayload = await getUserFromRequest();
 
-  if (!user) redirect("/login");
+  if (!userPayload) redirect("/login");
 
-  const { data: professional } = await supabase
-    .from("professionals")
-    .select("*")
-    .eq("user_id", user.id)
-    .single();
+  // Get professional details using Prisma
+  const professional = await prisma.professional.findUnique({
+    where: { userId: userPayload.userId },
+  });
 
-  if (!professional) redirect("/login");
+  if (!professional) {
+    // If user exists but is not a professional, maybe they shouldn't be here
+    // or we redirect to a setup page. For now, back to login.
+    redirect("/login");
+  }
 
   // Get upcoming slots
-  const { data: slots } = await supabase
-    .from("slots")
-    .select("*")
-    .eq("professional_id", professional.id)
-    .gte("start_time", new Date().toISOString())
-    .order("start_time", { ascending: true })
-    .limit(20);
+  const slots = await prisma.slot.findMany({
+    where: {
+      professionalId: professional.id,
+      start_time: {
+        gte: new Date(),
+      },
+    },
+    orderBy: { start_time: "asc" },
+    take: 20,
+  });
 
-  // Get recent bookings
-  const { data: bookings } = await supabase
-    .from("bookings")
-    .select("*, slots!inner(*), clients(*)")
-    .eq("slots.professional_id", professional.id)
-    .eq("status", "confirmed")
-    .order("booked_at", { ascending: false })
-    .limit(5);
+  // Get recent confirmed bookings
+  const bookings = await prisma.booking.findMany({
+    where: {
+      professionalId: professional.id,
+      status: "confirmed",
+    },
+    include: {
+      client: true,
+      slot: true,
+    },
+    orderBy: { booked_at: "desc" },
+    take: 5,
+  });
 
   // Stats
-  const availableSlots = (slots || []).filter((s) => s.status === "available");
-  const bookedSlots = (slots || []).filter((s) => s.status === "booked");
-  const totalRevenue = (bookings || []).reduce(
+  const availableSlots = slots.filter((s) => s.status === "available");
+  const bookedSlots = slots.filter((s) => s.status === "booked");
+  const totalRevenue = bookings.reduce(
     (sum, b) => sum + (b.price_paid || 0),
     0
   );
@@ -213,7 +222,7 @@ export default async function DashboardPage() {
             <Users weight="fill" className="w-5 h-5 text-chart-2" />
             Recent Bookings
           </CardTitle>
-        </CardHeader>
+        </Header>
         <CardContent>
           {(!bookings || bookings.length === 0) ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -232,7 +241,7 @@ export default async function DashboardPage() {
                 >
                   <div className="space-y-1">
                     <p className="font-semibold">
-                      {booking.clients?.name || "Client"}
+                      {booking.client?.name || "Client"}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {format(

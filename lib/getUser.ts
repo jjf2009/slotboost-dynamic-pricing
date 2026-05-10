@@ -8,5 +8,5 @@ export async function getUserFromRequest() {
 
   if (!token) return null;
 
-  return verifyToken(token);
+  return await verifyToken(token);
 }

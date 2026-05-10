@@ -1,16 +1,18 @@
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_for_development";
+const secret = new TextEncoder().encode(JWT_SECRET);
 
-export function verifyToken(token: string) {
+export async function verifyToken(token: string) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const { payload } = await jwtVerify(token, secret);
+    return payload as {
       userId: string;
       email: string;
+      role: string;
     };
-
-    return decoded;
-  } catch {
+  } catch (error) {
+    console.error("JWT Verification failed:", error);
     return null;
   }
 }

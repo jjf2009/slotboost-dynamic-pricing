@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (token) {
-    const user = verifyToken(token);
+    const user = await verifyToken(token);
     
     // If token is invalid and it's a protected route, redirect to login
     if (!user && isProtectedRoute) {
@@ -23,9 +23,17 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    // If already logged in and trying to access login/register, redirect to dashboard
-    if (user && isAuthRoute) {
-      return NextResponse.redirect(new URL("/professional/dashboard", request.url));
+    if (user) {
+      // 1. Role-based Access Control: Clients cannot access professional routes
+      if (isProtectedRoute && user.role !== "professional") {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+
+      // 2. Already logged in: Redirect away from login/register to the appropriate "home"
+      if (isAuthRoute) {
+        const dest = user.role === "professional" ? "/professional/dashboard" : "/";
+        return NextResponse.redirect(new URL(dest, request.url));
+      }
     }
   }
 

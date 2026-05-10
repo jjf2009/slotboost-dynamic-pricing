@@ -57,12 +57,12 @@ export class AuthService {
     // 5. Generate JWT Token
     const jwtSecret = process.env.JWT_SECRET || 'fallback_secret_for_development';
     const token = jwt.sign(
-      { userId: newUser.id, email: newUser.email },
+      { userId: newUser.id, email: newUser.email, role },
       jwtSecret,
       { expiresIn: '50d' }
     );
 
-    return { user: newUser, token };
+    return { user: { ...newUser, role }, token };
   }
 
 static async loginUser(input: LoginInput) {
@@ -85,14 +85,22 @@ static async loginUser(input: LoginInput) {
   // 3. Generate JWT
   const jwtSecret = process.env.JWT_SECRET || "fallback_secret_for_development";
 
+  // Determine role based on existence of professional profile
+  const userWithProfile = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { professional: true }
+  });
+  
+  const role = userWithProfile?.professional ? "professional" : "client";
+
   const token = jwt.sign(
-    { userId: user.id, email: user.email },
+    { userId: user.id, email: user.email, role },
     jwtSecret,
     { expiresIn: "50d" }
   );
 
 const { password_hash, ...safeUser } = user;
 
-return { user: safeUser, token };
+return { user: { ...safeUser, role }, token };
 }
 }

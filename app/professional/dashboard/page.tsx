@@ -27,9 +27,8 @@ export default async function DashboardPage() {
   });
 
   if (!professional) {
-    // If user exists but is not a professional, maybe they shouldn't be here
-    // or we redirect to a setup page. For now, back to login.
-    redirect("/login");
+    // If user exists but is not a professional, redirect to home
+    redirect("/");
   }
 
   // Get upcoming slots
@@ -222,7 +221,7 @@ export default async function DashboardPage() {
             <Users weight="fill" className="w-5 h-5 text-chart-2" />
             Recent Bookings
           </CardTitle>
-        </Header>
+        </CardHeader>
         <CardContent>
           {(!bookings || bookings.length === 0) ? (
             <div className="text-center py-12 text-muted-foreground">

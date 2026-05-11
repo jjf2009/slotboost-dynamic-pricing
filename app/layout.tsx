@@ -29,7 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("h-full scroll-smooth antialiased", inter.variable)}>
-      <body className="min-h-full flex flex-col font-sans">
+      <body 
+        className="min-h-full flex flex-col font-sans"
+        suppressHydrationWarning={true}
+      >
         {children}
         <Toaster richColors position="top-right" />
       </body>

@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarPlus, Spinner } from "@phosphor-icons/react";
+import { createSlotAction } from "@/app/actions/slots";
 import { format } from "date-fns";
 
 export default function NewSlotPage() {
@@ -17,64 +18,28 @@ export default function NewSlotPage() {
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState(60);
   const [demandIndex, setDemandIndex] = useState(0.5);
+  const [price, setPrice] = useState(500);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Get current user's professional profile
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        toast.error("Not authenticated");
-        return;
-      }
-
-      const { data: professional } = await supabase
-        .from("professionals")
-        .select("id, base_price")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!professional) {
-        toast.error("Professional profile not found");
-        return;
-      }
-
-      // Combine date + time
-      const startTime = new Date(`${date}T${time}`);
-
-      if (startTime <= new Date()) {
-        toast.error("Slot must be in the future");
-        setLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.from("slots").insert({
-        professional_id: professional.id,
-        start_time: startTime.toISOString(),
-        duration_mins: duration,
-        demand_index: demandIndex,
-        current_price: professional.base_price,
-        status: "available",
+      await createSlotAction({
+        date,
+        time,
+        duration,
+        demandIndex,
+        price,
       });
-
-      if (error) {
-        toast.error("Failed to create slot: " + error.message);
-        return;
-      }
 
       toast.success("Slot created successfully!");
       router.push("/professional/dashboard");
       router.refresh();
-    } catch {
-      toast.error("Something went wrong");
+    } catch (err: any) {
+      toast.error(err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -102,7 +67,7 @@ export default function NewSlotPage() {
                 <Input
                   id="slot-date"
                   type="date"
-                  value={date}
+                  value={date ?? ""}
                   onChange={(e) => setDate(e.target.value)}
                   required
                   min={format(new Date(), "yyyy-MM-dd")}
@@ -114,7 +79,7 @@ export default function NewSlotPage() {
                 <Input
                   id="slot-time"
                   type="time"
-                  value={time}
+                  value={time ?? ""}
                   onChange={(e) => setTime(e.target.value)}
                   required
                   className="h-11 rounded-xl"
@@ -130,28 +95,40 @@ export default function NewSlotPage() {
                 min={15}
                 max={240}
                 step={15}
-                value={duration}
-                onChange={(e) => setDuration(parseInt(e.target.value))}
+                value={duration ?? ""}
+                onChange={(e) => setDuration(parseInt(e.target.value) || 0)}
                 required
                 className="h-11 rounded-xl"
               />
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>Demand Index</Label>
-                <span className="text-sm font-mono font-bold text-primary tabular-nums">
-                  {demandIndex.toFixed(2)}
-                </span>
-              </div>
-              <Slider
+            <div className="space-y-2">
+              <Label htmlFor="slot-price">Starting Price (₹)</Label>
+              <Input
+                id="slot-price"
+                type="number"
+                min={0}
+                value={price ?? ""}
+                onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                required
+                className="h-11 rounded-xl font-bold"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="demand-index">Demand Index (0 to 1)</Label>
+              <Input
+                id="demand-index"
+                type="number"
                 min={0}
                 max={1}
-                step={0.05}
-                value={[demandIndex]}
-                onValueChange={([v]) => setDemandIndex(v)}
+                step={0.01}
+                value={demandIndex ?? ""}
+                onChange={(e) => setDemandIndex(parseFloat(e.target.value) || 0)}
+                required
+                className="h-11 rounded-xl font-mono font-bold"
               />
-              <div className="flex justify-between text-xs text-muted-foreground">
+              <div className="flex justify-between text-xs text-muted-foreground px-1 pt-1">
                 <span>0 = Dead hour (max discount)</span>
                 <span>1 = Peak demand (no discount)</span>
               </div>

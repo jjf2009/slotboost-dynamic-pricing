@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { getUserFromRequest } from "@/lib/getUser";
+import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { Lightning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
@@ -8,21 +9,16 @@ export default async function ProfessionalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userPayload = await getUserFromRequest();
 
-  if (!user) {
+  if (!userPayload) {
     redirect("/login");
   }
 
-  // Get professional profile
-  const { data: professional } = await supabase
-    .from("professionals")
-    .select("*")
-    .eq("user_id", user.id)
-    .single();
+  // Get professional profile using Prisma
+  const professional = await prisma.professional.findUnique({
+    where: { userId: userPayload.userId },
+  });
 
   if (!professional) {
     redirect("/login");
@@ -67,8 +63,8 @@ export default async function ProfessionalLayout({
             <form
               action={async () => {
                 "use server";
-                const supabase = await createClient();
-                await supabase.auth.signOut();
+                const { cookies } = await import("next/headers");
+                (await cookies()).delete("token");
                 redirect("/login");
               }}
             >

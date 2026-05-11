@@ -85,10 +85,8 @@ export function Navbar() {
         {/* Mobile Menu */}
         <div className="md:hidden">
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-xl">
-                <List size={22} weight="bold" />
-              </Button>
+            <SheetTrigger render={<Button variant="ghost" size="icon" className="rounded-xl" />}>
+              <List size={22} weight="bold" />
             </SheetTrigger>
             <SheetContent side="right" className="rounded-l-3xl w-[300px]">
               <SheetHeader className="pb-6 border-b">
@@ -101,31 +99,34 @@ export function Navbar() {
               </SheetHeader>
               <nav className="flex flex-col gap-2 mt-6">
                 {navLinks.map((link) => (
-                  <SheetClose key={link.label} asChild>
-                    <a
-                      href={link.href}
-                      className="text-base font-medium text-muted-foreground hover:text-foreground px-3 py-2.5 rounded-xl hover:bg-accent transition-colors"
-                    >
-                      {link.label}
-                    </a>
+                  <SheetClose 
+                    key={link.label} 
+                    render={
+                      <a
+                        href={link.href}
+                        className="text-base font-medium text-muted-foreground hover:text-foreground px-3 py-2.5 rounded-xl hover:bg-accent transition-colors"
+                      />
+                    }
+                  >
+                    {link.label}
                   </SheetClose>
                 ))}
                 <hr className="my-3 border-border" />
-                <SheetClose asChild>
+                <SheetClose render={
                   <Link
                     href="/login"
                     className="text-base font-semibold text-foreground px-3 py-2.5 rounded-xl hover:bg-accent transition-colors"
-                  >
-                    Sign in
-                  </Link>
+                  />
+                }>
+                  Sign in
                 </SheetClose>
-                <SheetClose asChild>
+                <SheetClose render={
                   <Link
                     href="/register"
                     className="bg-primary text-primary-foreground px-5 py-3 rounded-xl text-center font-bold shadow-lg"
-                  >
-                    Get Started
-                  </Link>
+                  />
+                }>
+                  Get Started
                 </SheetClose>
               </nav>
             </SheetContent>

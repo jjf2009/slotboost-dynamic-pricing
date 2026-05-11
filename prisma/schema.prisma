@@ -40,6 +40,7 @@ model Slot {
   demand_index        Float     @default(1.0)
   d_cancel_active     Boolean   @default(false)
   d_cancel_expires_at DateTime?
+  current_price       Float     @default(0)
   status              String    @default("available") // available, booked
   bookings            Booking[]
 

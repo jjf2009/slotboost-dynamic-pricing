@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
+
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarPlus, Spinner } from "@phosphor-icons/react";
@@ -32,14 +32,14 @@ export default function NewSlotPage() {
         time,
         duration,
         demandIndex,
-        price,
       });
 
       toast.success("Slot created successfully!");
       router.push("/professional/dashboard");
       router.refresh();
-    } catch (err: any) {
-      toast.error(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      const error = err as Error;
+      toast.error(error.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

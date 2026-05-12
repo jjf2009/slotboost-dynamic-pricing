@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
-import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/getUser";
+import { NextRequest, NextResponse } from "next/server";
 
-// POST /api/slots/book
-// Books a slot atomically using a Prisma transaction to prevent double-booking
+// POST /api/waitlist/book
+// Allows a waitlisted client to book within the 10-minute D_cancel window (FR-26, FR-27)
 export async function POST(req: NextRequest) {
-  const { slotId, name, email, phone } = await req.json();
+  const { slotId, email, name, phone } = await req.json();
 
   if (!slotId || !email) {
     return NextResponse.json({ error: "slotId and email are required" }, { status: 400 });
@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Lock and verify slot is available
       const slot = await tx.slot.findUnique({
         where: { id: slotId },
         include: { professional: true },
@@ -24,20 +23,25 @@ export async function POST(req: NextRequest) {
         throw new Error("SLOT_NOT_AVAILABLE");
       }
 
-      // 2. Recalculate price at moment of booking (FR-19 — prevent stale price exploit)
+      // FR-26: Check the 10-minute offer window
+      const now = new Date();
+      if (!slot.d_cancel_active || !slot.d_cancel_expires_at || now > slot.d_cancel_expires_at) {
+        throw new Error("OFFER_EXPIRED");
+      }
+
+      // Recalculate price with D_cancel still active
       const { currentPrice } = calculatePrice({
         basePrice: slot.professional.base_price,
         startTime: slot.start_time,
         demandIndex: slot.demand_index,
         dMax: slot.professional.d_max,
-        dCancelActive: slot.d_cancel_active,
-        dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
+        dCancelActive: true,
+        dCancelExpiry: slot.d_cancel_expires_at,
       });
 
-      // 3. Get or create client record
+      // Get or create client
       const authUser = await getUserFromRequest();
       let client = await tx.client.findUnique({ where: { email } });
-
       if (!client) {
         client = await tx.client.create({
           data: {
@@ -49,7 +53,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 4. Create booking record
+      // Create booking
       const booking = await tx.booking.create({
         data: {
           slotId,
@@ -59,38 +63,50 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 5. Mark slot as booked and freeze price (FR-19)
+      // Mark slot as booked, deactivate D_cancel (FR-27)
       await tx.slot.update({
         where: { id: slotId },
-        data: { status: "booked", current_price: currentPrice },
+        data: {
+          status: "booked",
+          current_price: currentPrice,
+          d_cancel_active: false,
+          d_cancel_expires_at: null,
+        },
+      });
+
+      // Remove the booking client from waitlist
+      await tx.waitlist.deleteMany({
+        where: { slotId, clientId: client.id },
       });
 
       return { booking, client, currentPrice };
     });
 
-    // 6. Fire confirmation notification (fire-and-forget)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    fetch(`${appUrl}/api/notifications/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "confirmation",
-        slotId,
-        clientId: result.client.id,
-        price: result.currentPrice,
-      }),
-    }).catch(console.error);
+    // Notify remaining waitlisted clients "slot filled" (FR-27)
+    const remainingWaitlist = await prisma.waitlist.findMany({
+      where: { slotId },
+      include: { client: true },
+    });
+
+    for (const entry of remainingWaitlist) {
+      console.log(
+        `[SMS → ${entry.client.phone ?? entry.client.email}] Slot filled — someone else booked it.`
+      );
+    }
 
     return NextResponse.json({ booking: result.booking, price: result.currentPrice }, { status: 201 });
   } catch (err: unknown) {
     const error = err as Error;
     if (error.message === "SLOT_NOT_AVAILABLE") {
+      return NextResponse.json({ error: "Slot no longer available." }, { status: 409 });
+    }
+    if (error.message === "OFFER_EXPIRED") {
       return NextResponse.json(
-        { error: "Slot not available. Would you like to join the waitlist?" },
-        { status: 409 }
+        { error: "The 10-minute offer window has expired. The slot is available at regular pricing." },
+        { status: 410 }
       );
     }
-    console.error("Booking error:", err);
+    console.error("Waitlist booking error:", err);
     return NextResponse.json({ error: "Booking failed" }, { status: 500 });
   }
 }

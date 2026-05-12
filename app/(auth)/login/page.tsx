@@ -36,7 +36,8 @@ export default function LoginPage() {
       const dest = data.user.role === "professional" ? "/professional/dashboard" : "/";
       router.push(dest);
       router.refresh();
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       toast.error(error.message);
     } finally {
       setLoading(false);

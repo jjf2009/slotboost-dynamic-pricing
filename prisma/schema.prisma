@@ -6,93 +6,131 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── User (auth identity) ────────────────────────────────────────────────────
 model User {
   id            String        @id @default(uuid())
   name          String
   email         String        @unique
   password_hash String
+  role          String        @default("client") // "professional" | "client"
   created_at    DateTime      @default(now())
-  applications  Application[]
   professional  Professional?
+  client        Client?
 
   @@map("users")
 }
 
+// ─── Professional profile ────────────────────────────────────────────────────
 model Professional {
-  id         String    @id @default(uuid())
-  userId     String    @unique @map("user_id")
-  user       User      @relation(fields: [userId], references: [id])
-  name       String
-  base_price Float     @default(500)
-  d_max      Float     @default(0.5) // Max discount
-  slots      Slot[]
-  bookings   Booking[]
+  id           String       @id @default(uuid())
+  userId       String       @unique @map("user_id")
+  user         User         @relation(fields: [userId], references: [id])
+  name         String
+  email        String?
+  phone        String?
+  service_type String?
+  base_price   Float        @default(500)   // min ₹100, max ₹50,000 (enforced in API)
+  d_max        Float        @default(0.4)   // 0.0 – 0.6
+  heat_map     Json?        // e.g. { "mon_09": 0.8, "tue_14": 0.3 }
+  is_mobile    Boolean      @default(false)
+  created_at   DateTime     @default(now())
+  slots        Slot[]
+  subscribers  Subscriber[]
 
   @@map("professionals")
 }
 
-model Slot {
-  id                  String    @id @default(uuid())
-  professionalId      String    @map("professional_id")
-  professional        Professional @relation(fields: [professionalId], references: [id])
-  start_time          DateTime
-  duration_mins       Int       @default(60)
-  demand_index        Float     @default(1.0)
-  d_cancel_active     Boolean   @default(false)
-  d_cancel_expires_at DateTime?
-  current_price       Float     @default(0)
-  status              String    @default("available") // available, booked
-  bookings            Booking[]
-
-  @@map("slots")
-}
-
-model Booking {
-  id             String       @id @default(uuid())
-  slotId         String       @map("slot_id")
-  slot           Slot         @relation(fields: [slotId], references: [id])
-  professionalId String       @map("professional_id")
-  professional   Professional @relation(fields: [professionalId], references: [id])
-  clientId       String?      @map("client_id")
-  client         Client?      @relation(fields: [clientId], references: [id])
-  price_paid     Float
-  status         String       @default("confirmed")
-  booked_at      DateTime     @default(now())
-
-  @@map("bookings")
-}
-
+// ─── Client profile ──────────────────────────────────────────────────────────
 model Client {
-  id       String    @id @default(uuid())
-  name     String
-  email    String    @unique
-  bookings Booking[]
+  id            String         @id @default(uuid())
+  userId        String?        @unique @map("user_id")
+  user          User?          @relation(fields: [userId], references: [id])
+  name          String
+  email         String         @unique
+  phone         String?
+  created_at    DateTime       @default(now())
+  bookings      Booking[]
+  waitlists     Waitlist[]
+  subscriptions Subscription[]
+  subscribers   Subscriber[]
 
   @@map("clients")
 }
 
-model Application {
-  id          String            @id @default(uuid())
-  company     String
-  role        String
-  status      ApplicationStatus @default(APPLIED)
-  method      ApplicationMethod @default(COLD_EMAIL)
-  appliedDate DateTime          @default(now()) @map("applied_date")
-  notes       String?
-  userId      String            @map("user_id")
-  user        User              @relation(fields: [id], references: [id], onDelete: Cascade)
+// ─── Appointment slot ────────────────────────────────────────────────────────
+model Slot {
+  id                  String       @id @default(uuid())
+  professionalId      String       @map("professional_id")
+  professional        Professional @relation(fields: [professionalId], references: [id])
+  start_time          DateTime
+  duration_mins       Int          @default(60)
+  demand_index        Float        @default(1.0) // 0.0 – 1.0
+  d_cancel_active     Boolean      @default(false)
+  d_cancel_expires_at DateTime?
+  current_price       Float        @default(0)
+  status              String       @default("available") // available | booked
+  created_at          DateTime     @default(now())
+  bookings            Booking[]
+  waitlists           Waitlist[]
 
-  @@map("applications")
+  @@map("slots")
 }
 
-enum ApplicationStatus {
-  APPLIED
-  INTERVIEW
-  OFFER
-  REJECTED
+// ─── Booking ─────────────────────────────────────────────────────────────────
+model Booking {
+  id           String    @id @default(uuid())
+  slotId       String    @map("slot_id")
+  slot         Slot      @relation(fields: [slotId], references: [id])
+  clientId     String    @map("client_id")
+  client       Client    @relation(fields: [clientId], references: [id])
+  price_paid   Float
+  status       String    @default("confirmed") // confirmed | cancelled
+  booked_at    DateTime  @default(now())
+  cancelled_at DateTime?
+
+  @@map("bookings")
 }
 
-enum ApplicationMethod {
-  COLD_EMAIL     @map("COLD EMAIL")
-  OFFICIAL_MEANS @map("OFFICAL MEANS")
+// ─── Waitlist ────────────────────────────────────────────────────────────────
+model Waitlist {
+  id        String   @id @default(uuid())
+  slotId    String   @map("slot_id")
+  slot      Slot     @relation(fields: [slotId], references: [id])
+  clientId  String   @map("client_id")
+  client    Client   @relation(fields: [clientId], references: [id])
+  joined_at DateTime @default(now())
+
+  @@unique([slotId, clientId]) // prevent duplicate entries
+  @@map("waitlists")
+}
+
+// ─── Flash-deal subscriber (opt-in per professional) ────────────────────────
+model Subscriber {
+  id             String       @id @default(uuid())
+  professionalId String       @map("professional_id")
+  professional   Professional @relation(fields: [professionalId], references: [id])
+  clientId       String       @map("client_id")
+  client         Client       @relation(fields: [clientId], references: [id])
+  phone          String
+  channel        String       @default("sms") // sms | whatsapp
+  created_at     DateTime     @default(now())
+
+  @@unique([professionalId, clientId]) // one subscription per pair
+  @@map("subscribers")
+}
+
+// ─── Flex-credit subscription plan ──────────────────────────────────────────
+model Subscription {
+  id             String   @id @default(uuid())
+  clientId       String   @map("client_id")
+  client         Client   @relation(fields: [clientId], references: [id])
+  professionalId String   @map("professional_id")
+  credits_total  Int      @default(4)
+  credits_used   Int      @default(0)
+  off_peak_used  Int      @default(0) // must be ≥ 1 before all 4 credits used
+  billing_month  String   // format: "2026-05"
+  created_at     DateTime @default(now())
+
+  @@unique([clientId, professionalId, billing_month])
+  @@map("subscriptions")
 }

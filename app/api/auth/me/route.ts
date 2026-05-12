@@ -1,35 +1,48 @@
-import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/getUser";
 import { prisma } from "@/lib/db";
+import { NextResponse } from "next/server";
 
+// GET /api/auth/me → returns current user + profile (no Supabase)
 export async function GET() {
-  const userPayload = await getUserFromRequest();
+  const user = await getUserFromRequest();
 
-  if (!userPayload) {
-    return NextResponse.json({ user: null }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userPayload.userId },
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.userId },
     select: {
       id: true,
       name: true,
       email: true,
+      role: true,
       created_at: true,
-    }
+      professional: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          service_type: true,
+          base_price: true,
+          d_max: true,
+          heat_map: true,
+          is_mobile: true,
+        },
+      },
+      client: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+    },
   });
 
-  if (!user) {
-    return NextResponse.json({ user: null }, { status: 401 });
+  if (!dbUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const professional = await prisma.professional.findUnique({
-    where: { userId: user.id }
-  });
-
-  return NextResponse.json({
-    user,
-    role: userPayload.role,
-    professional
-  });
+  return NextResponse.json(dbUser);
 }

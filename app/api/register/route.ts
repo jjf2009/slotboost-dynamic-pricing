@@ -47,7 +47,8 @@ export async function POST(req: Request) {
 
     return response;
 
-  } catch (error: any) {
+  } catch (err: unknown) {
+    const error = err as Error;
     // 6. Controller Responsibility: Formatting HTTP Errors gracefully
     console.error('Registration Error:', error);
 

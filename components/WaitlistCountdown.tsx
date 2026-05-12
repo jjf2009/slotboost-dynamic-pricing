@@ -27,9 +27,11 @@ export function WaitlistCountdown({
   onBook,
   onExpire,
 }: WaitlistCountdownProps) {
-  const [secondsLeft, setSecondsLeft] = useState(
-    Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))
-  );
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    setSecondsLeft(Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)));
+  }, [expiresAt]);
 
   useEffect(() => {
     const interval = setInterval(() => {

@@ -36,7 +36,8 @@ export async function POST(req:Request){
 
     return response;
 
-    }catch(error:any){
+    }catch(err:unknown){
+        const error = err as Error;
         console.error('Registration Error:', error);
 
             // If the service deliberately threw our custom duplicate error:

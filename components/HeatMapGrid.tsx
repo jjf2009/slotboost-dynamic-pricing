@@ -104,8 +104,8 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
             max={1}
             step={0.05}
             value={[values[selected] ?? 0.5]}
-            onValueChange={([v]) =>
-              setValues((prev) => ({ ...prev, [selected]: v }))
+            onValueChange={(val) =>
+              setValues((prev) => ({ ...prev, [selected]: Array.isArray(val) ? val[0] : val as unknown as number }))
             }
           />
           <div className="flex justify-between text-xs text-muted-foreground">

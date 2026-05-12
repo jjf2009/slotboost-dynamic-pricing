@@ -33,7 +33,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Temporary legacy compatibility layer
 export const db = {
-  query: async (_text: string, _params?: any[]) => {
+  query: async (_text: string, _params?: unknown[]) => {
     console.warn(
       'Using legacy db.query wrapper. Please migrate to Prisma.'
     );

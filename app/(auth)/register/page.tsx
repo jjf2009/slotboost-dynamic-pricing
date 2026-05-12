@@ -46,7 +46,8 @@ export default function RegisterPage() {
       toast.success("Account created! Welcome to SlotBoost.");
       router.push(role === "professional" ? "/professional/dashboard" : "/");
       router.refresh();
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = err as Error;
       toast.error(error.message);
     } finally {
       setLoading(false);

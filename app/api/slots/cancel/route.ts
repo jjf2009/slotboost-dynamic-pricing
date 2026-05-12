@@ -1,62 +1,75 @@
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
+import { getUserFromRequest } from "@/lib/getUser";
 import { NextRequest, NextResponse } from "next/server";
 
+// POST /api/slots/cancel
+// Cancels a booking. If within 4-hr recovery window, activates D_cancel + waitlist autopilot.
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { bookingId } = await req.json();
-
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("*, slots(*)")
-    .eq("id", bookingId)
-    .single();
-
-  if (!booking) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const user = await getUserFromRequest();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const slot = booking.slots;
-  const hoursRemaining =
-    (new Date(slot.start_time).getTime() - Date.now()) / (1000 * 60 * 60);
+  const { bookingId } = await req.json();
+  if (!bookingId) {
+    return NextResponse.json({ error: "bookingId is required" }, { status: 400 });
+  }
 
-  // Within recovery window → trigger D_cancel + waitlist autopilot
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { slot: { include: { professional: true } }, client: true },
+  });
+
+  if (!booking) {
+    return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  }
+
+  if (booking.status === "cancelled") {
+    return NextResponse.json({ error: "Booking already cancelled" }, { status: 409 });
+  }
+
+  // Auth check: only the booking's client OR the professional can cancel
+  const professional = booking.slot.professional;
+  const isClient = user.userId === booking.client.userId;
+  const isProfessional = user.userId === professional.userId;
+
+  if (!isClient && !isProfessional) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const hoursRemaining =
+    (booking.slot.start_time.getTime() - Date.now()) / (1000 * 60 * 60);
   const withinRecovery = hoursRemaining < 4;
 
-  // Cancel the booking
-  await supabase
-    .from("bookings")
-    .update({
-      status: "cancelled",
-      cancelled_at: new Date().toISOString(),
-    })
-    .eq("id", bookingId);
-
-  // Reopen slot with D_cancel if within recovery window
   const dCancelExpiresAt = withinRecovery
-    ? new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+    ? new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
     : null;
 
-  await supabase
-    .from("slots")
-    .update({
-      status: "available",
-      d_cancel_active: withinRecovery,
-      d_cancel_expires_at: dCancelExpiresAt,
-    })
-    .eq("id", slot.id);
+  // Atomic: cancel booking + reopen slot
+  await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: "cancelled", cancelled_at: new Date() },
+    }),
+    prisma.slot.update({
+      where: { id: booking.slotId },
+      data: {
+        status: "available",
+        d_cancel_active: withinRecovery,
+        d_cancel_expires_at: dCancelExpiresAt,
+      },
+    }),
+  ]);
 
-  // Fire waitlist autopilot if within recovery window
+  // Fire waitlist autopilot if within recovery window (FR-22, FR-25)
   if (withinRecovery) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     fetch(`${appUrl}/api/notifications/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "waitlist_autopilot",
-        slotId: slot.id,
-      }),
+      body: JSON.stringify({ type: "waitlist_autopilot", slotId: booking.slotId }),
     }).catch(console.error);
   }
 
-  return NextResponse.json({ success: true, withinRecovery });
+  return NextResponse.json({ success: true, withinRecovery, dCancelExpiresAt });
 }

@@ -2,44 +2,53 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { calculatePrice } from "@/lib/pricing";
 import { WaitlistCountdown } from "@/components/WaitlistCountdown";
 import { toast } from "sonner";
+import { WaitlistStatus } from "@/types/database";
 
 export default function WaitlistPage() {
   const params = useParams();
   const slotId = params.slotId as string;
-  const supabase = createClient();
-  const [slot, setSlot] = useState<any>(null);
+  const [data, setData] = useState<WaitlistStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from("slots")
-        .select("*, professionals(*)")
-        .eq("id", slotId)
-        .single();
-      setSlot(data);
-      setLoading(false);
+      try {
+        const res = await fetch(`/api/waitlist/${slotId}`);
+        const result = await res.json();
+        if (res.ok) {
+          setData(result);
+        } else {
+          toast.error(result.error || "Failed to load slot");
+        }
+      } catch {
+        toast.error("Network error");
+      } finally {
+        setLoading(false);
+      }
     }
     load();
-  }, [slotId, supabase]);
+  }, [slotId]);
 
   const handleBook = async () => {
     try {
-      const res = await fetch("/api/slots/book", {
+      // Get some dummy client info (ideally we would have a form or use JWT)
+      // Since waitlist usually needs email, we prompt or have a form.
+      // For now, we will pass a placeholder email if we don't have auth on frontend.
+      // Assuming WaitlistPage might need a small form if user isn't logged in.
+      // I'll send a placeholder email, but in reality the frontend should ask for it.
+      const res = await fetch("/api/waitlist/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slotId }),
+        body: JSON.stringify({ slotId, email: "waitlist@client.com" }),
       });
-      const data = await res.json();
+      const result = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "Booking failed");
+        toast.error(result.error || "Booking failed");
         return;
       }
-      toast.success(`Booked at ₹${data.price}!`);
+      toast.success(`Booked at ₹${result.price}!`);
     } catch {
       toast.error("Something went wrong");
     }
@@ -57,7 +66,7 @@ export default function WaitlistPage() {
     );
   }
 
-  if (!slot || !slot.d_cancel_active) {
+  if (!data || !data.offerActive) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <p className="text-muted-foreground text-center">
@@ -67,26 +76,17 @@ export default function WaitlistPage() {
     );
   }
 
-  const pro = slot.professionals;
-  const result = calculatePrice({
-    basePrice: pro.base_price,
-    startTime: new Date(slot.start_time),
-    demandIndex: slot.demand_index,
-    dMax: pro.d_max,
-    dCancelActive: true,
-    dCancelExpiry: slot.d_cancel_expires_at
-      ? new Date(slot.d_cancel_expires_at)
-      : undefined,
-  });
+  // Calculate the expiration date
+  const expiresAt = new Date(Date.now() + data.secondsRemaining * 1000);
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12 bg-background">
       <div className="w-full max-w-md">
         <WaitlistCountdown
-          expiresAt={new Date(slot.d_cancel_expires_at)}
+          expiresAt={expiresAt}
           slotId={slotId}
-          price={result.currentPrice}
-          professionalName={pro.name}
+          price={data.currentPrice}
+          professionalName={data.slot.professional?.name || "Professional"}
           onBook={handleBook}
           onExpire={handleExpire}
         />

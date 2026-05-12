@@ -46,7 +46,9 @@ export default async function DashboardPage() {
   // Get recent confirmed bookings
   const bookings = await prisma.booking.findMany({
     where: {
-      professionalId: professional.id,
+      slot: {
+        professionalId: professional.id,
+      },
       status: "confirmed",
     },
     include: {
@@ -233,7 +235,7 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {bookings.map((booking: any) => (
+              {bookings.map((booking) => (
                 <div
                   key={booking.id}
                   className="flex items-center justify-between py-4 first:pt-0 last:pb-0"

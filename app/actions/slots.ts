@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/getUser";
+import { calculatePrice } from "@/lib/pricing";
 import { revalidatePath } from "next/cache";
 
 export async function createSlotAction(formData: {
@@ -9,11 +10,10 @@ export async function createSlotAction(formData: {
   time: string;
   duration: number;
   demandIndex: number;
-  price: number;
 }) {
   const userPayload = await getUserFromRequest();
 
-  if (!userPayload) {
+  if (!userPayload || userPayload.role !== "professional") {
     throw new Error("Unauthorized");
   }
 
@@ -25,24 +25,56 @@ export async function createSlotAction(formData: {
     throw new Error("Professional profile not found");
   }
 
-  // Combine date + time
   const startTime = new Date(`${formData.date}T${formData.time}`);
-
   if (startTime <= new Date()) {
     throw new Error("Slot must be in the future");
   }
+
+  // Calculate initial price using the pricing engine
+  const { currentPrice } = calculatePrice({
+    basePrice: professional.base_price,
+    startTime,
+    demandIndex: formData.demandIndex ?? 1.0,
+    dMax: professional.d_max,
+    dCancelActive: false,
+  });
 
   const slot = await prisma.slot.create({
     data: {
       professionalId: professional.id,
       start_time: startTime,
-      duration_mins: formData.duration,
-      demand_index: formData.demandIndex,
-      current_price: formData.price,
+      duration_mins: formData.duration ?? 60,
+      demand_index: formData.demandIndex ?? 1.0,
+      current_price: currentPrice,
       status: "available",
     },
   });
 
   revalidatePath("/professional/dashboard");
   return slot;
+}
+
+export async function deleteSlotAction(slotId: string) {
+  const userPayload = await getUserFromRequest();
+
+  if (!userPayload || userPayload.role !== "professional") {
+    throw new Error("Unauthorized");
+  }
+
+  const slot = await prisma.slot.findUnique({
+    where: { id: slotId },
+    include: { professional: true },
+  });
+
+  if (!slot) throw new Error("Slot not found");
+  if (slot.professional.userId !== userPayload.userId) throw new Error("Forbidden");
+
+  // FR-06: Block deletion if slot is booked
+  if (slot.status === "booked") {
+    throw new Error("Cannot delete a slot that has an active booking.");
+  }
+
+  await prisma.slot.delete({ where: { id: slotId } });
+  revalidatePath("/professional/dashboard");
+  return { success: true };
 }

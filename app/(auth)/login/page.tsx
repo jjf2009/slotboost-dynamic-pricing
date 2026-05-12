@@ -33,7 +33,7 @@ export default function LoginPage() {
       }
 
       toast.success("Welcome back!");
-      const dest = data.user.role === "professional" ? "/professional/dashboard" : "/";
+      const dest = data.user.role === "professional" ? "/professional/dashboard" : "/client/dashboard";
       router.push(dest);
       router.refresh();
     } catch (err: unknown) {

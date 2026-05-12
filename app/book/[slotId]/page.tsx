@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
@@ -12,17 +12,15 @@ interface Props {
 
 export default async function BookingPage({ params }: Props) {
   const { slotId } = await params;
-  const supabase = await createClient();
 
-  const { data: slot } = await supabase
-    .from("slots")
-    .select("*, professionals(*)")
-    .eq("id", slotId)
-    .single();
+  const slot = await prisma.slot.findUnique({
+    where: { id: slotId },
+    include: { professional: true },
+  });
 
   if (!slot || slot.status !== "available") notFound();
 
-  const pro = slot.professionals;
+  const pro = slot.professional;
   const result = calculatePrice({
     basePrice: pro.base_price,
     startTime: new Date(slot.start_time),

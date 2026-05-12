@@ -3,11 +3,13 @@ import { verifyToken } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get("token")?.value;
+  const path = request.nextUrl.pathname;
 
   // Define protected routes
-  const isProtectedRoute = request.nextUrl.pathname.startsWith("/professional");
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || 
-                     request.nextUrl.pathname.startsWith("/register");
+  const isProfessionalRoute = path.startsWith("/professional");
+  const isClientRoute = path.startsWith("/client");
+  const isProtectedRoute = isProfessionalRoute || isClientRoute;
+  const isAuthRoute = path.startsWith("/login") || path.startsWith("/register");
 
   if (isProtectedRoute && !token) {
     return NextResponse.redirect(new URL("/login", request.url));
@@ -15,7 +17,7 @@ export async function middleware(request: NextRequest) {
 
   if (token) {
     const user = await verifyToken(token);
-    
+
     // If token is invalid and it's a protected route, redirect to login
     if (!user && isProtectedRoute) {
       const response = NextResponse.redirect(new URL("/login", request.url));
@@ -24,14 +26,17 @@ export async function middleware(request: NextRequest) {
     }
 
     if (user) {
-      // 1. Role-based Access Control: Clients cannot access professional routes
-      if (isProtectedRoute && user.role !== "professional") {
-        return NextResponse.redirect(new URL("/", request.url));
+      // Role-based Access Control
+      if (isProfessionalRoute && user.role !== "professional") {
+        return NextResponse.redirect(new URL("/client/dashboard", request.url));
+      }
+      if (isClientRoute && user.role !== "client") {
+        return NextResponse.redirect(new URL("/professional/dashboard", request.url));
       }
 
-      // 2. Already logged in: Redirect away from login/register to the appropriate "home"
+      // Already logged in: Redirect away from login/register to the appropriate "home"
       if (isAuthRoute) {
-        const dest = user.role === "professional" ? "/professional/dashboard" : "/";
+        const dest = user.role === "professional" ? "/professional/dashboard" : "/client/dashboard";
         return NextResponse.redirect(new URL(dest, request.url));
       }
     }
@@ -41,5 +46,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/professional/:path*", "/login", "/register"],
+  matcher: ["/professional/:path*", "/client/:path*", "/login", "/register"],
 };

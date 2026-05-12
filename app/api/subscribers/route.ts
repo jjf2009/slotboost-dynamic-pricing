@@ -65,3 +65,33 @@ export async function DELETE(req: NextRequest) {
   // FR-11: removal must be reflected immediately (synchronous delete above guarantees it)
   return NextResponse.json({ success: true, removed: deleted.count });
 }
+
+// GET /api/subscribers?professionalId=xyz
+export async function GET(req: NextRequest) {
+  const user = await getUserFromRequest();
+  if (!user) {
+    return NextResponse.json({ isSubscribed: false });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const professionalId = searchParams.get("professionalId");
+  if (!professionalId) {
+    return NextResponse.json({ error: "professionalId is required" }, { status: 400 });
+  }
+
+  const client = await prisma.client.findUnique({ where: { userId: user.userId } });
+  if (!client) {
+    return NextResponse.json({ isSubscribed: false });
+  }
+
+  const subscriber = await prisma.subscriber.findUnique({
+    where: {
+      professionalId_clientId: {
+        professionalId,
+        clientId: client.id,
+      },
+    },
+  });
+
+  return NextResponse.json({ isSubscribed: !!subscriber });
+}

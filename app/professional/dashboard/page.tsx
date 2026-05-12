@@ -15,6 +15,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { getUserFromRequest } from "@/lib/getUser";
 import { prisma } from "@/lib/db";
+import { ProfessionalSettings } from "@/components/ProfessionalSettings";
+import { RecentBookings } from "@/components/RecentBookings";
 
 export default async function DashboardPage() {
   const userPayload = await getUserFromRequest();
@@ -92,12 +94,18 @@ export default async function DashboardPage() {
             Welcome back, {professional.name}. Here&apos;s your slot overview.
           </p>
         </div>
-        <Link href="/professional/slots/new">
-          <Button className="rounded-xl font-bold shadow-sm gap-2">
-            <CalendarPlus weight="bold" className="w-4 h-4" />
-            Create Slot
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <ProfessionalSettings 
+            initialBasePrice={professional.base_price}
+            initialDMax={professional.d_max}
+          />
+          <Link href="/professional/slots/new">
+            <Button className="rounded-xl font-bold shadow-sm gap-2">
+              <CalendarPlus weight="bold" className="w-4 h-4" />
+              Create Slot
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -225,39 +233,7 @@ export default async function DashboardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {(!bookings || bookings.length === 0) ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users weight="duotone" className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">No bookings yet</p>
-              <p className="text-sm mt-1">
-                Share your booking page to start receiving clients.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border/50">
-              {bookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
-                >
-                  <div className="space-y-1">
-                    <p className="font-semibold">
-                      {booking.client?.name || "Client"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {format(
-                        new Date(booking.booked_at),
-                        "dd MMM yyyy, h:mm a"
-                      )}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="font-bold">
-                    ₹{booking.price_paid}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
+          <RecentBookings bookings={bookings} />
         </CardContent>
       </Card>
     </div>

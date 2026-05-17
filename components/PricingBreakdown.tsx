@@ -3,10 +3,9 @@ import { Clock, ChartLineDown, Bell, Gauge } from "@phosphor-icons/react";
 
 interface PricingBreakdownProps {
   result: PricingResult;
-  basePrice: number;
 }
 
-export function PricingBreakdown({ result, basePrice }: PricingBreakdownProps) {
+export function PricingBreakdown({ result }: PricingBreakdownProps) {
   const discount = Math.round(result.dTotal * 100);
 
   if (discount === 0) return null;

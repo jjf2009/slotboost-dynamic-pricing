@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Lightning, List, X } from "@phosphor-icons/react";
+import { Lightning, List } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,

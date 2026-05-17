@@ -61,9 +61,21 @@ export async function POST(req: NextRequest) {
     }),
   ]);
 
-  // Fire waitlist autopilot if within recovery window (FR-22, FR-25)
-  if (withinRecovery) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  if (isProfessional) {
+    // FR-23: Professional cancelled — notify the client with a full-refund message
+    fetch(`${appUrl}/api/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "professional_cancel",
+        slotId: booking.slotId,
+        clientId: booking.clientId,
+      }),
+    }).catch(console.error);
+  } else if (withinRecovery) {
+    // FR-22, FR-25: Client cancelled within recovery window — trigger waitlist autopilot
     fetch(`${appUrl}/api/notifications/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -69,6 +69,7 @@ model Slot {
   d_cancel_expires_at DateTime?
   current_price       Float        @default(0)
   status              String       @default("available") // available | booked
+  reminder_sent       Boolean      @default(false) // FR-24: tracks if 1-hr reminder was sent
   created_at          DateTime     @default(now())
   bookings            Booking[]
   waitlists           Waitlist[]

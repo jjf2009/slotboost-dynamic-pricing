@@ -33,6 +33,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Temporary legacy compatibility layer
 export const db = {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   query: async (_text: string, _params?: unknown[]) => {
     console.warn(
       'Using legacy db.query wrapper. Please migrate to Prisma.'

@@ -4,6 +4,7 @@ import { SlotCard } from "@/components/SlotCard";
 import { useRouter } from "next/navigation";
 
 interface ClientSlotListProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   slots: any[];
 }
 

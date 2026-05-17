@@ -57,11 +57,9 @@ export function ProfessionalSettings({ initialBasePrice, initialDMax }: Professi
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="rounded-xl font-bold shadow-sm gap-2">
-          <Gear weight="bold" className="w-4 h-4" />
-          Settings
-        </Button>
+      <DialogTrigger render={<Button variant="outline" className="rounded-xl font-bold shadow-sm gap-2" />}>
+        <Gear weight="bold" className="w-4 h-4" />
+        Settings
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -96,7 +94,7 @@ export function ProfessionalSettings({ initialBasePrice, initialDMax }: Professi
             </div>
             <Slider
               value={[dMax]}
-              onValueChange={(vals) => setDMax(vals[0])}
+              onValueChange={(vals) => setDMax(Array.isArray(vals) ? vals[0] : (vals as unknown as number))}
               max={60}
               min={0}
               step={5}

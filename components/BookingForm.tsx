@@ -102,7 +102,7 @@ export function BookingForm({
               )}
             </div>
           </div>
-          <PricingBreakdown result={pricingResult} basePrice={basePrice} />
+          <PricingBreakdown result={pricingResult} />
         </div>
 
         {/* Form */}

@@ -60,14 +60,14 @@ export function CancelBookingDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger render={
         <Button
           variant="ghost"
           size="sm"
           className="text-destructive hover:text-destructive hover:bg-destructive/10 font-semibold text-sm"
-        >
-          Cancel
-        </Button>
+        />
+      }>
+        Cancel
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>

@@ -1,10 +1,44 @@
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { format } from "date-fns";
+import twilio from "twilio";
 
-// POST /api/notifications/send
-// Dispatches notifications. Currently logs to console.
-// To activate Twilio: uncomment the lines marked [TWILIO]
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
+
+// Initialize Twilio client using environment variables
+const twilioClient = accountSid && authToken ? twilio(accountSid, authToken) : null;
+
+// FR-21/24/25/26/27: Send free template-approved WhatsApp messages via Twilio Sandbox
+async function sendWhatsApp(to: string | null, contentVariables: { "1": string; "2": string }) {
+  if (!to) return;
+  
+  // Format target number to whatsapp:+<number> format
+  let formattedTo = to.trim();
+  if (!formattedTo.startsWith("whatsapp:")) {
+    formattedTo = `whatsapp:${formattedTo.replace(/[\s+-]+/g, "")}`;
+  }
+
+  console.log(`[Twilio WhatsApp → ${formattedTo}] Sending variables:`, contentVariables);
+
+  if (twilioClient) {
+    try {
+      const message = await twilioClient.messages.create({
+        from: twilioWhatsappNumber,
+        contentSid: "HXb5b62575e6e4ff6129ad7c8efe1f983e", // Pre-approved Sandbox Template
+        contentVariables: JSON.stringify(contentVariables),
+        to: formattedTo,
+      });
+      console.log(`[Twilio WhatsApp Success] SID: ${message.sid}`);
+    } catch (err) {
+      console.error(`[Twilio WhatsApp Error] Failed to send to ${formattedTo}:`, err);
+    }
+  } else {
+    console.log(`[Twilio Simulation] Credentials missing. Mocking message sending.`);
+  }
+}
+
 export async function POST(req: NextRequest) {
   const { type, slotId, clientId, price } = await req.json();
 
@@ -36,13 +70,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
-    const clientMsg = `✅ Booking confirmed! ${pro.name} on ${slotTime}. Price: ₹${price}. See you there!`;
-    const proMsg = `📅 New booking! ${client.name} booked your ${slotTime} slot at ₹${price}.`;
+    // Send WhatsApp to Client
+    await sendWhatsApp(client.phone, {
+      "1": `Booking with ${pro.name}`,
+      "2": `${slotTime} (Price: ₹${price})`
+    });
 
-    console.log(`[SMS → Client ${client.phone ?? client.email}] ${clientMsg}`);
-    console.log(`[SMS → Professional ${pro.phone ?? pro.email}] ${proMsg}`);
-    // [TWILIO] await twilioClient.messages.create({ body: clientMsg, from: TWILIO_PHONE, to: client.phone })
-    // [TWILIO] await twilioClient.messages.create({ body: proMsg, from: TWILIO_PHONE, to: pro.phone })
+    // Send WhatsApp to Professional
+    await sendWhatsApp(pro.phone, {
+      "1": `New Booking by ${client.name}`,
+      "2": `${slotTime} (Price: ₹${price})`
+    });
   }
 
   // ── Flash Deal (FR-18) ────────────────────────────────────────────────────
@@ -53,14 +91,12 @@ export async function POST(req: NextRequest) {
 
     const currentPrice = slot.current_price;
     const discount = Math.round((1 - currentPrice / pro.base_price) * 100);
-    const bookingUrl = `${appUrl}/book/${slotId}`;
 
     for (const sub of subscribers) {
-      const msg = `⚡ Flash Deal! ${pro.name}'s ${slotTime} slot is now ₹${currentPrice} (${discount}% off ₹${pro.base_price}). Book now: ${bookingUrl}`;
-      console.log(`[${sub.channel.toUpperCase()} → ${sub.phone}] ${msg}`);
-      // [TWILIO] const from = sub.channel === 'whatsapp' ? TWILIO_WHATSAPP : TWILIO_PHONE
-      // [TWILIO] const to = sub.channel === 'whatsapp' ? `whatsapp:${sub.phone}` : sub.phone
-      // [TWILIO] await twilioClient.messages.create({ body: msg, from, to }).catch(console.error)
+      await sendWhatsApp(sub.phone, {
+        "1": `⚡ Flash Deal with ${pro.name}!`,
+        "2": `${slotTime} - now at ₹${currentPrice} (${discount}% off)`
+      });
     }
   }
 
@@ -71,15 +107,46 @@ export async function POST(req: NextRequest) {
       include: { client: true },
     });
 
-    const bookingUrl = `${appUrl}/waitlist/${slotId}`;
-
     for (const entry of waitlist) {
-      const phone = entry.client.phone;
-      const identifier = phone ?? entry.client.email;
-      const msg = `🚨 Urgent! ${pro.name}'s ${slotTime} slot just opened at ₹${slot.current_price}. Valid 10 mins only: ${bookingUrl}`;
-      console.log(`[SMS → ${identifier}] ${msg}`);
-      // [TWILIO] await twilioClient.messages.create({ body: msg, from: TWILIO_PHONE, to: phone }).catch(console.error)
+      await sendWhatsApp(entry.client.phone, {
+        "1": `🚨 Slot Open with ${pro.name}!`,
+        "2": `${slotTime} - Book inside 10 mins: ${appUrl}/waitlist/${slotId}`
+      });
     }
+  }
+
+  // ── Professional Cancellation — notify client (FR-23) ────────────────────
+  if (type === "professional_cancel") {
+    if (!clientId) {
+      return NextResponse.json({ error: "clientId required for professional_cancel" }, { status: 400 });
+    }
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    await sendWhatsApp(client.phone, {
+      "1": `❌ Cancelled by ${pro.name}`,
+      "2": `${slotTime} (Full refund will be processed)`
+    });
+  }
+
+  // ── Appointment Reminder — 1 hour before slot (FR-24) ────────────────────
+  if (type === "reminder") {
+    if (!clientId) {
+      return NextResponse.json({ error: "clientId required for reminder" }, { status: 400 });
+    }
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    await sendWhatsApp(client.phone, {
+      "1": `⏰ Appointment Reminder`,
+      "2": `Coming up in 1 hour with ${pro.name} (${slotTime})`
+    });
   }
 
   return NextResponse.json({ success: true, type });

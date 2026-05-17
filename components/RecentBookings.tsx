@@ -90,10 +90,8 @@ export function RecentBookings({ bookings }: RecentBookingsProps) {
             </Badge>
 
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                  <XCircle weight="fill" className="w-5 h-5" />
-                </Button>
+              <AlertDialogTrigger render={<Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" />}>
+                <XCircle weight="fill" className="w-5 h-5" />
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>

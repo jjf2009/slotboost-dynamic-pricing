@@ -121,11 +121,9 @@ export function FlashDealToggle({ professionalId }: FlashDealToggleProps) {
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full sm:w-auto font-semibold hover:border-primary hover:text-primary transition-colors">
-          <Bell className="w-5 h-5 mr-2" weight="duotone" />
-          Get Flash Deal Alerts
-        </Button>
+      <DialogTrigger render={<Button variant="outline" className="w-full sm:w-auto font-semibold hover:border-primary hover:text-primary transition-colors" />}>
+        <Bell className="w-5 h-5 mr-2" weight="duotone" />
+        Get Flash Deal Alerts
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -151,7 +149,7 @@ export function FlashDealToggle({ professionalId }: FlashDealToggleProps) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="channel">Alert Channel</Label>
-            <Select value={channel} onValueChange={setChannel}>
+            <Select value={channel} onValueChange={(val) => setChannel(val || "sms")}>
               <SelectTrigger id="channel">
                 <SelectValue placeholder="Select channel" />
               </SelectTrigger>

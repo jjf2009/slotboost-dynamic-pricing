@@ -30,12 +30,7 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
     return "bg-destructive/70";
   };
 
-  const getLabel = (di: number) => {
-    if (di >= 0.8) return "Peak";
-    if (di >= 0.5) return "Medium";
-    if (di >= 0.2) return "Low";
-    return "Dead";
-  };
+
 
   const key = (day: string, hour: number) => `${day}-${hour}`;
 

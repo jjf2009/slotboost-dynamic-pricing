@@ -11,5 +11,4 @@ export function getTwilioClient() {
   )
 }
 
-export const TWILIO_PHONE = process.env.TWILIO_PHONE_NUMBER!
 export const TWILIO_WHATSAPP = process.env.TWILIO_WHATSAPP_NUMBER!

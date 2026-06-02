@@ -4,5 +4,7 @@
       "path": "/api/pricing/recalculate",
       "schedule": "*/15 * * * *"
     }
+
+
   ]
 }

@@ -257,7 +257,7 @@ export default function Home() {
                     "Full heat map control",
                     "D_max up to 60%",
                     "Waitlist autopilot",
-                    "Flex Credits system",
+                    "Local MVP demo flow",
                   ].map((f) => (
                     <li key={f} className="flex items-center gap-2">
                       <ShieldCheck weight="fill" className="w-4 h-4 text-primary shrink-0" />

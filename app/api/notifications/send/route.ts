@@ -115,6 +115,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Slot Filled — notify remaining waitlisted clients (FR-27) ─────────────
+  if (type === "slot_filled") {
+    const waitlist = await prisma.waitlist.findMany({
+      where: { slotId },
+      include: { client: true },
+    });
+
+    for (const entry of waitlist) {
+      await sendWhatsApp(entry.client.phone, {
+        "1": `Slot filled with ${pro.name}`,
+        "2": `${slotTime} was just booked by another waitlisted client.`
+      });
+    }
+  }
+
   // ── Professional Cancellation — notify client (FR-23) ────────────────────
   if (type === "professional_cancel") {
     if (!clientId) {

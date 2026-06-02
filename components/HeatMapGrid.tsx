@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { FloppyDisk } from "@phosphor-icons/react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const HOURS = Array.from({ length: 24 }, (_, i) =>
   i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`
 );
@@ -30,9 +31,8 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
     return "bg-destructive/70";
   };
 
-
-
-  const key = (day: string, hour: number) => `${day}-${hour}`;
+  const key = (dayIndex: number, hour: number) =>
+    `${DAY_KEYS[dayIndex]}_${hour.toString().padStart(2, "0")}`;
 
   return (
     <div className="space-y-6">
@@ -54,16 +54,15 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
           ))}
 
           {/* Day rows */}
-          {DAYS.map((day) => (
-            <>
+          {DAYS.map((day, dayIndex) => (
+            <div key={day} className="contents">
               <div
-                key={day}
                 className="text-xs font-semibold flex items-center text-muted-foreground"
               >
                 {day}
               </div>
               {Array.from({ length: 24 }, (_, hour) => {
-                const k = key(day, hour);
+                const k = key(dayIndex, hour);
                 const di = values[k] ?? 0.5;
                 return (
                   <button
@@ -78,7 +77,7 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
                   />
                 );
               })}
-            </>
+            </div>
           ))}
         </div>
       </div>
@@ -88,7 +87,8 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
         <div className="border rounded-xl p-5 space-y-4 bg-card shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">
-              {selected.split("-")[0]} at {HOURS[parseInt(selected.split("-")[1])]}
+              {DAYS[DAY_KEYS.indexOf(selected.split("_")[0])]} at{" "}
+              {HOURS[parseInt(selected.split("_")[1])]}
             </p>
             <Badge variant="outline" className="font-mono tabular-nums">
               DI: {(values[selected] ?? 0.5).toFixed(2)}
@@ -99,9 +99,10 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
             max={1}
             step={0.05}
             value={[values[selected] ?? 0.5]}
-            onValueChange={(val) =>
-              setValues((prev) => ({ ...prev, [selected]: Array.isArray(val) ? val[0] : val as unknown as number }))
-            }
+            onValueChange={(val) => {
+              const nextValue = typeof val === "number" ? val : val[0];
+              setValues((prev) => ({ ...prev, [selected]: nextValue ?? 0.5 }));
+            }}
           />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>0 = Dead hour (max discount)</span>

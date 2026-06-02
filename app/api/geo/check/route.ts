@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// FR-28/29/30: Completely Free Geocoding and Routing using OpenStreetMap (Nominatim) and OSRM.
-// This completely avoids the paid Google Maps API and does not require billing/credit card setup.
+// FR-28/29/30: Free geocoding and routing using OpenStreetMap (Nominatim) and OSRM.
 
 async function geocode(address: string): Promise<{ lat: number; lon: number } | null> {
   try {

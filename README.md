@@ -56,22 +56,32 @@ npm install
 ```
 
 ### 3. Set up Environment Variables
-Create a `.env.local` file in the root directory and add your credentials:
+Create a `.env` file in the root directory and add your local MVP credentials:
 ```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Database
+DATABASE_URL=your_postgres_connection_url
+DIRECT_URL=your_direct_postgres_connection_url_if_available
 
-# Twilio (Notifications)
+# Auth
+JWT_SECRET=your_generated_jwt_secret
+
+# Twilio WhatsApp Sandbox
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=your_twilio_number
-TWILIO_WHATSAPP_NUMBER=whatsapp:your_whatsapp_number
+TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-CRON_SECRET=your_generated_cron_secret
+NODE_ENV=development
+```
+
+The local MVP uses Nominatim + OSRM for free geo-checking, so no paid maps key is required. Payment gateway keys are also not required because payments and Flex Credits are future scope.
+
+To sync the Prisma schema to the connected database:
+
+```bash
+npx prisma db push
+npx prisma generate
 ```
 
 
@@ -80,6 +90,12 @@ CRON_SECRET=your_generated_cron_secret
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) to see the app.
+
+For the local demo, manually trigger dynamic pricing, flash-deal checks, and reminder checks:
+
+```bash
+curl http://localhost:3000/api/pricing/recalculate
+```
 
 ---
 

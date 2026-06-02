@@ -55,6 +55,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      if (slot.professional.is_mobile && !clientLocation) {
+        throw new Error("GEO_LOCATION_REQUIRED");
+      }
+
       // 2. Recalculate price at moment of booking (FR-19 — prevent stale price exploit)
       const { currentPrice } = calculatePrice({
         basePrice: slot.professional.base_price,
@@ -80,7 +84,17 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // 4. Create booking record
+      // 4. Atomically claim the slot before creating the booking (FR-20)
+      const claimed = await tx.slot.updateMany({
+        where: { id: slotId, status: "available" },
+        data: { status: "booked", current_price: currentPrice },
+      });
+
+      if (claimed.count === 0) {
+        throw new Error("SLOT_NOT_AVAILABLE");
+      }
+
+      // 5. Create booking record
       const booking = await tx.booking.create({
         data: {
           slotId,
@@ -88,12 +102,6 @@ export async function POST(req: NextRequest) {
           price_paid: currentPrice,
           status: "confirmed",
         },
-      });
-
-      // 5. Mark slot as booked and freeze price (FR-19)
-      await tx.slot.update({
-        where: { id: slotId },
-        data: { status: "booked", current_price: currentPrice },
       });
 
       return { booking, client, currentPrice };
@@ -126,6 +134,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "This professional is not available in your area for this time slot." },
         { status: 403 }
+      );
+    }
+    if (error.message === "GEO_LOCATION_REQUIRED") {
+      return NextResponse.json(
+        { error: "Please enter your location/address so we can check this mobile professional's travel time." },
+        { status: 400 }
       );
     }
     console.error("Booking error:", err);

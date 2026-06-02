@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { getUserFromRequest } from "@/lib/getUser";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,7 +10,10 @@ export async function POST(req: NextRequest) {
   const { slotId, email, name, phone } = await req.json();
 
   if (!slotId || !email) {
-    return NextResponse.json({ error: "slotId and email are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "slotId and email are required" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -25,7 +29,11 @@ export async function POST(req: NextRequest) {
 
       // FR-26: Check the 10-minute offer window
       const now = new Date();
-      if (!slot.d_cancel_active || !slot.d_cancel_expires_at || now > slot.d_cancel_expires_at) {
+      if (
+        !slot.d_cancel_active ||
+        !slot.d_cancel_expires_at ||
+        now > slot.d_cancel_expires_at
+      ) {
         throw new Error("OFFER_EXPIRED");
       }
 
@@ -33,7 +41,11 @@ export async function POST(req: NextRequest) {
       const { currentPrice } = calculatePrice({
         basePrice: slot.professional.base_price,
         startTime: slot.start_time,
-        demandIndex: slot.demand_index,
+        demandIndex: getDemandIndexFromHeatMap(
+          slot.professional.heat_map,
+          slot.start_time,
+          slot.demand_index,
+        ),
         dMax: slot.professional.d_max,
         dCancelActive: true,
         dCancelExpiry: slot.d_cancel_expires_at,
@@ -90,20 +102,29 @@ export async function POST(req: NextRequest) {
 
     for (const entry of remainingWaitlist) {
       console.log(
-        `[SMS → ${entry.client.phone ?? entry.client.email}] Slot filled — someone else booked it.`
+        `[SMS → ${entry.client.phone ?? entry.client.email}] Slot filled — someone else booked it.`,
       );
     }
 
-    return NextResponse.json({ booking: result.booking, price: result.currentPrice }, { status: 201 });
+    return NextResponse.json(
+      { booking: result.booking, price: result.currentPrice },
+      { status: 201 },
+    );
   } catch (err: unknown) {
     const error = err as Error;
     if (error.message === "SLOT_NOT_AVAILABLE") {
-      return NextResponse.json({ error: "Slot no longer available." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Slot no longer available." },
+        { status: 409 },
+      );
     }
     if (error.message === "OFFER_EXPIRED") {
       return NextResponse.json(
-        { error: "The 10-minute offer window has expired. The slot is available at regular pricing." },
-        { status: 410 }
+        {
+          error:
+            "The 10-minute offer window has expired. The slot is available at regular pricing.",
+        },
+        { status: 410 },
       );
     }
     console.error("Waitlist booking error:", err);

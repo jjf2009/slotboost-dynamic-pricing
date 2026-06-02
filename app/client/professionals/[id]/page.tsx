@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { getUserFromRequest } from "@/lib/getUser";
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export default async function ProfessionalDetailPage({ params }: Props) {
       base_price: true,
       d_max: true,
       is_mobile: true,
+      heat_map: true,
     },
   });
 
@@ -54,10 +56,16 @@ export default async function ProfessionalDetailPage({ params }: Props) {
 
   // Calculate live prices for each slot
   const slotsWithPricing = slots.map((slot) => {
+    const demandIndex = getDemandIndexFromHeatMap(
+      professional.heat_map,
+      slot.start_time,
+      slot.demand_index,
+    );
+
     const pricing = calculatePrice({
       basePrice: professional.base_price,
       startTime: slot.start_time,
-      demandIndex: slot.demand_index,
+      demandIndex,
       dMax: professional.d_max,
       dCancelActive: slot.d_cancel_active,
       dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -65,7 +73,9 @@ export default async function ProfessionalDetailPage({ params }: Props) {
     return { ...slot, pricing };
   });
 
-  const availableSlots = slotsWithPricing.filter((s) => s.status === "available");
+  const availableSlots = slotsWithPricing.filter(
+    (s) => s.status === "available",
+  );
   const bookedSlots = slotsWithPricing.filter((s) => s.status === "booked");
 
   return (
@@ -82,11 +92,13 @@ export default async function ProfessionalDetailPage({ params }: Props) {
       {/* Professional header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/60 to-chart-4/60 flex items-center justify-center text-xl font-bold text-primary-foreground">
+          <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-primary/60 to-chart-4/60 flex items-center justify-center text-xl font-bold text-primary-foreground">
             {professional.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{professional.name}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {professional.name}
+            </h1>
             <div className="flex items-center gap-3 mt-1">
               {professional.service_type && (
                 <Badge variant="secondary">{professional.service_type}</Badge>
@@ -123,7 +135,10 @@ export default async function ProfessionalDetailPage({ params }: Props) {
         <CardContent>
           {availableSlots.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <Clock weight="duotone" className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <Clock
+                weight="duotone"
+                className="w-12 h-12 mx-auto mb-3 opacity-50"
+              />
               <p className="font-medium">No available slots right now</p>
               <p className="text-sm mt-1">
                 Subscribe to flash deals to get notified when new slots open up.
@@ -143,7 +158,10 @@ export default async function ProfessionalDetailPage({ params }: Props) {
                   >
                     <div className="space-y-1.5">
                       <p className="font-semibold text-base">
-                        {format(new Date(slot.start_time), "EEE, dd MMM · h:mm a")}
+                        {format(
+                          new Date(slot.start_time),
+                          "EEE, dd MMM · h:mm a",
+                        )}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {slot.duration_mins} min session
@@ -164,11 +182,18 @@ export default async function ProfessionalDetailPage({ params }: Props) {
 
                     <div className="flex items-center gap-4 w-full sm:w-auto">
                       <div className="text-right">
-                        <p className="font-bold text-xl">₹{slot.pricing.currentPrice}</p>
+                        <p className="font-bold text-xl">
+                          ₹{slot.pricing.currentPrice}
+                        </p>
                         {discount > 0 && (
                           <p className="text-xs text-muted-foreground">
-                            <span className="line-through">₹{professional.base_price}</span>{" "}
-                            · <span className="text-primary font-semibold">{discount}% off</span>
+                            <span className="line-through">
+                              ₹{professional.base_price}
+                            </span>{" "}
+                            ·{" "}
+                            <span className="text-primary font-semibold">
+                              {discount}% off
+                            </span>
                           </p>
                         )}
                       </div>
@@ -204,10 +229,14 @@ export default async function ProfessionalDetailPage({ params }: Props) {
                 >
                   <div className="space-y-1">
                     <p className="font-semibold">
-                      {format(new Date(slot.start_time), "EEE, dd MMM · h:mm a")}
+                      {format(
+                        new Date(slot.start_time),
+                        "EEE, dd MMM · h:mm a",
+                      )}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {slot.duration_mins} min · {slot._count.waitlists} on waitlist
+                      {slot.duration_mins} min · {slot._count.waitlists} on
+                      waitlist
                     </p>
                   </div>
                   <JoinWaitlistButton slotId={slot.id} />

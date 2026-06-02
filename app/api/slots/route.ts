@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/getUser";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/slots?professionalId=xxx  → list available slots with live prices
@@ -9,7 +10,10 @@ export async function GET(req: NextRequest) {
   const professionalId = searchParams.get("professionalId");
 
   if (!professionalId) {
-    return NextResponse.json({ error: "professionalId is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "professionalId is required" },
+      { status: 400 },
+    );
   }
 
   const slots = await prisma.slot.findMany({
@@ -27,7 +31,11 @@ export async function GET(req: NextRequest) {
     const result = calculatePrice({
       basePrice: slot.professional.base_price,
       startTime: slot.start_time,
-      demandIndex: slot.demand_index,
+      demandIndex: getDemandIndexFromHeatMap(
+        slot.professional.heat_map,
+        slot.start_time,
+        slot.demand_index,
+      ),
       dMax: slot.professional.d_max,
       dCancelActive: slot.d_cancel_active,
       dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -49,26 +57,44 @@ export async function POST(req: NextRequest) {
   const { date, time, duration, demandIndex } = body;
 
   if (!date || !time) {
-    return NextResponse.json({ error: "date and time are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "date and time are required" },
+      { status: 400 },
+    );
   }
 
   const professional = await prisma.professional.findUnique({
     where: { userId: user.userId },
   });
   if (!professional) {
-    return NextResponse.json({ error: "Professional profile not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Professional profile not found" },
+      { status: 404 },
+    );
   }
 
   const startTime = new Date(`${date}T${time}`);
   if (startTime <= new Date()) {
-    return NextResponse.json({ error: "Slot must be in the future" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Slot must be in the future" },
+      { status: 400 },
+    );
   }
+
+  const heatMap =
+    professional.heat_map &&
+    typeof professional.heat_map === "object" &&
+    !Array.isArray(professional.heat_map)
+      ? (professional.heat_map as Record<string, number>)
+      : {};
+  const heatMapKey = `${["mon", "tue", "wed", "thu", "fri", "sat", "sun"][(startTime.getDay() + 6) % 7]}_${String(startTime.getHours()).padStart(2, "0")}`;
+  const resolvedDemandIndex = heatMap[heatMapKey] ?? demandIndex ?? 0.5;
 
   // Calculate initial price
   const { currentPrice } = calculatePrice({
     basePrice: professional.base_price,
     startTime,
-    demandIndex: demandIndex ?? 1.0,
+    demandIndex: resolvedDemandIndex,
     dMax: professional.d_max,
     dCancelActive: false,
   });
@@ -78,7 +104,7 @@ export async function POST(req: NextRequest) {
       professionalId: professional.id,
       start_time: startTime,
       duration_mins: duration ?? 60,
-      demand_index: demandIndex ?? 1.0,
+      demand_index: resolvedDemandIndex,
       current_price: currentPrice,
       status: "available",
     },

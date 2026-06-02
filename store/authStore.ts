@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
 interface AuthState {
-  user: any | null;
-  setUser: (user: any) => void;
+  user: Record<string, unknown> | null;
+  setUser: (user: Record<string, unknown>) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({

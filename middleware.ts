@@ -31,12 +31,17 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL("/client/dashboard", request.url));
       }
       if (isClientRoute && user.role !== "client") {
-        return NextResponse.redirect(new URL("/professional/dashboard", request.url));
+        return NextResponse.redirect(
+          new URL("/professional/dashboard", request.url),
+        );
       }
 
       // Already logged in: Redirect away from login/register to the appropriate "home"
       if (isAuthRoute) {
-        const dest = user.role === "professional" ? "/professional/dashboard" : "/client/dashboard";
+        const dest =
+          user.role === "professional"
+            ? "/professional/dashboard"
+            : "/client/dashboard";
         return NextResponse.redirect(new URL(dest, request.url));
       }
     }
@@ -47,4 +52,5 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: ["/professional/:path*", "/client/:path*", "/login", "/register"],
+  runtime: "nodejs",
 };

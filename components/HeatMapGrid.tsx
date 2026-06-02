@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +8,9 @@ import { FloppyDisk } from "@phosphor-icons/react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOURS = Array.from({ length: 24 }, (_, i) =>
-  i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`
+  i === 0 ? "12a" : i < 12 ? `${i}a` : i === 12 ? "12p" : `${i - 12}p`,
 );
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 type HeatMap = Record<string, number>;
 
@@ -19,9 +20,17 @@ interface HeatMapGridProps {
   saving?: boolean;
 }
 
-export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps) {
+export function HeatMapGrid({
+  initialValues,
+  onSave,
+  saving,
+}: HeatMapGridProps) {
   const [values, setValues] = useState<HeatMap>(initialValues);
   const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValues(initialValues);
+  }, [initialValues]);
 
   const getColor = (di: number) => {
     if (di >= 0.8) return "bg-chart-2";
@@ -30,18 +39,14 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
     return "bg-destructive/70";
   };
 
-
-
-  const key = (day: string, hour: number) => `${day}-${hour}`;
+  const key = (dayIndex: number, hour: number) =>
+    `${DAY_KEYS[dayIndex]}_${String(hour).padStart(2, "0")}`;
 
   return (
     <div className="space-y-6">
       {/* Grid */}
       <div className="overflow-x-auto rounded-xl border border-border/50 p-4 bg-card">
-        <div
-          className="grid gap-[3px]"
-          style={{ gridTemplateColumns: `56px repeat(24, minmax(28px, 1fr))` }}
-        >
+        <div className="grid gap-0.75 grid-cols-[56px_repeat(24,minmax(28px,1fr))]">
           {/* Hour headers */}
           <div />
           {HOURS.map((h, i) => (
@@ -54,7 +59,7 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
           ))}
 
           {/* Day rows */}
-          {DAYS.map((day) => (
+          {DAYS.map((day, dayIndex) => (
             <>
               <div
                 key={day}
@@ -63,7 +68,7 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
                 {day}
               </div>
               {Array.from({ length: 24 }, (_, hour) => {
-                const k = key(day, hour);
+                const k = key(dayIndex, hour);
                 const di = values[k] ?? 0.5;
                 return (
                   <button
@@ -88,7 +93,8 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
         <div className="border rounded-xl p-5 space-y-4 bg-card shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">
-              {selected.split("-")[0]} at {HOURS[parseInt(selected.split("-")[1])]}
+              {DAYS[DAY_KEYS.indexOf(selected.split("_")[0])]} at{" "}
+              {HOURS[parseInt(selected.split("_")[1])]}
             </p>
             <Badge variant="outline" className="font-mono tabular-nums">
               DI: {(values[selected] ?? 0.5).toFixed(2)}
@@ -100,7 +106,12 @@ export function HeatMapGrid({ initialValues, onSave, saving }: HeatMapGridProps)
             step={0.05}
             value={[values[selected] ?? 0.5]}
             onValueChange={(val) =>
-              setValues((prev) => ({ ...prev, [selected]: Array.isArray(val) ? val[0] : val as unknown as number }))
+              setValues((prev) => ({
+                ...prev,
+                [selected]: Array.isArray(val)
+                  ? val[0]
+                  : (val as unknown as number),
+              }))
             }
           />
           <div className="flex justify-between text-xs text-muted-foreground">

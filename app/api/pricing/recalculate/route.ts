@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { NextResponse } from "next/server";
 
 // GET /api/pricing/recalculate
@@ -31,7 +32,11 @@ export async function GET() {
       const result = calculatePrice({
         basePrice: slot.professional.base_price,
         startTime: slot.start_time,
-        demandIndex: slot.demand_index,
+        demandIndex: getDemandIndexFromHeatMap(
+          slot.professional.heat_map,
+          slot.start_time,
+          slot.demand_index,
+        ),
         dMax: slot.professional.d_max,
         dCancelActive: slot.d_cancel_active,
         dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -45,7 +50,8 @@ export async function GET() {
       updated++;
 
       // Detect first-time D_lead activation → send flash deal (FR-18)
-      const justDropped = oldPrice !== null && result.currentPrice < oldPrice && result.dLead > 0;
+      const justDropped =
+        oldPrice !== null && result.currentPrice < oldPrice && result.dLead > 0;
       if (justDropped) {
         fetch(`${appUrl}/api/notifications/send`, {
           method: "POST",

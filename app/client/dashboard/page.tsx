@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUserFromRequest } from "@/lib/getUser";
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,13 @@ export default async function ClientDashboardPage() {
       slot: {
         include: {
           professional: {
-            select: { name: true, service_type: true, base_price: true, d_max: true },
+            select: {
+              name: true,
+              service_type: true,
+              base_price: true,
+              d_max: true,
+              heat_map: true,
+            },
           },
         },
       },
@@ -79,10 +86,15 @@ export default async function ClientDashboardPage() {
   const waitlistsWithPricing = activeWaitlists.map((entry) => {
     const slot = entry.slot;
     const pro = slot.professional;
+    const demandIndex = getDemandIndexFromHeatMap(
+      pro.heat_map,
+      slot.start_time,
+      slot.demand_index,
+    );
     const pricing = calculatePrice({
       basePrice: pro.base_price,
       startTime: slot.start_time,
-      demandIndex: slot.demand_index,
+      demandIndex,
       dMax: pro.d_max,
       dCancelActive: slot.d_cancel_active,
       dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -149,7 +161,10 @@ export default async function ClientDashboardPage() {
                 <div
                   className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center`}
                 >
-                  <stat.icon weight="duotone" className={`w-5 h-5 ${stat.color}`} />
+                  <stat.icon
+                    weight="duotone"
+                    className={`w-5 h-5 ${stat.color}`}
+                  />
                 </div>
               </div>
               <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
@@ -174,7 +189,10 @@ export default async function ClientDashboardPage() {
         <CardContent>
           {upcomingBookings.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <CalendarCheck weight="duotone" className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <CalendarCheck
+                weight="duotone"
+                className="w-12 h-12 mx-auto mb-3 opacity-50"
+              />
               <p className="font-medium">No upcoming bookings</p>
               <p className="text-sm mt-1">
                 Browse professionals to find and book your first appointment.
@@ -198,8 +216,11 @@ export default async function ClientDashboardPage() {
                     <div className="space-y-1">
                       <p className="font-semibold">{pro.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {format(new Date(slot.start_time), "EEE, dd MMM · h:mm a")} ·{" "}
-                        {slot.duration_mins} min
+                        {format(
+                          new Date(slot.start_time),
+                          "EEE, dd MMM · h:mm a",
+                        )}{" "}
+                        · {slot.duration_mins} min
                       </p>
                       {pro.service_type && (
                         <Badge variant="secondary" className="text-xs">
@@ -232,10 +253,14 @@ export default async function ClientDashboardPage() {
         <CardContent>
           {waitlistsWithPricing.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <Users weight="duotone" className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <Users
+                weight="duotone"
+                className="w-12 h-12 mx-auto mb-3 opacity-50"
+              />
               <p className="font-medium">No active waitlists</p>
               <p className="text-sm mt-1">
-                Join a waitlist on any fully-booked slot to get notified if it opens up.
+                Join a waitlist on any fully-booked slot to get notified if it
+                opens up.
               </p>
             </div>
           ) : (
@@ -252,8 +277,11 @@ export default async function ClientDashboardPage() {
                     <div className="space-y-1">
                       <p className="font-semibold">{pro.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {format(new Date(slot.start_time), "EEE, dd MMM · h:mm a")} ·{" "}
-                        {slot.duration_mins} min
+                        {format(
+                          new Date(slot.start_time),
+                          "EEE, dd MMM · h:mm a",
+                        )}{" "}
+                        · {slot.duration_mins} min
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -263,10 +291,15 @@ export default async function ClientDashboardPage() {
                         </Badge>
                       )}
                       <div className="text-right">
-                        <p className="font-bold text-lg">₹{entry.pricing.currentPrice}</p>
+                        <p className="font-bold text-lg">
+                          ₹{entry.pricing.currentPrice}
+                        </p>
                         {discount > 0 && (
                           <p className="text-xs text-muted-foreground">
-                            <span className="line-through">₹{pro.base_price}</span> · {discount}% off
+                            <span className="line-through">
+                              ₹{pro.base_price}
+                            </span>{" "}
+                            · {discount}% off
                           </p>
                         )}
                       </div>

@@ -44,7 +44,11 @@ export default function RegisterPage() {
       }
 
       toast.success("Account created! Welcome to SlotBoost.");
-      router.push(role === "professional" ? "/professional/dashboard" : "/");
+      router.push(
+        role === "professional"
+          ? "/professional/dashboard"
+          : "/client/dashboard",
+      );
       router.refresh();
     } catch (err: unknown) {
       const error = err as Error;
@@ -56,7 +60,9 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold tracking-tight mb-2">Create your account</h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-2">
+        Create your account
+      </h1>
       <p className="text-muted-foreground mb-8">
         Start filling slots and boosting revenue today.
       </p>

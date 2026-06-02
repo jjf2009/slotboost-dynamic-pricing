@@ -1,58 +1,62 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { HeatMapGrid } from "@/components/HeatMapGrid";
 import { toast } from "sonner";
+import { normalizeHeatMap } from "@/lib/heatmap";
 
 export default function HeatMapPage() {
   const [heatMap, setHeatMap] = useState<Record<string, number>>({});
-  const [professionalId, setProfessionalId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
   useEffect(() => {
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const response = await fetch("/api/professional/heatmap");
 
-      if (!user) return;
+        if (!response.ok) {
+          throw new Error("Failed to load heat map");
+        }
 
-      const { data: professional } = await supabase
-        .from("professionals")
-        .select("id, heat_map")
-        .eq("user_id", user.id)
-        .single();
-
-      if (professional) {
-        setProfessionalId(professional.id);
-        setHeatMap(professional.heat_map || {});
+        const data = (await response.json()) as {
+          heat_map?: Record<string, number>;
+        };
+        setHeatMap(normalizeHeatMap(data.heat_map));
+      } catch {
+        toast.error("Failed to load heat map");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     load();
-  }, [supabase]);
+  }, []);
 
   const handleSave = async (values: Record<string, number>) => {
-    if (!professionalId) return;
     setSaving(true);
 
-    const { error } = await supabase
-      .from("professionals")
-      .update({ heat_map: values })
-      .eq("id", professionalId);
+    try {
+      const response = await fetch("/api/professional/heatmap", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
 
-    if (error) {
-      toast.error("Failed to save heat map");
-    } else {
+      if (!response.ok) {
+        throw new Error("Failed to save heat map");
+      }
+
+      const data = (await response.json()) as {
+        heat_map?: Record<string, number>;
+      };
       toast.success("Heat map saved!");
-      setHeatMap(values);
+      setHeatMap(normalizeHeatMap(data.heat_map ?? values));
+    } catch {
+      toast.error("Failed to save heat map");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
   };
 
   if (loading) {

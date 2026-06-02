@@ -22,8 +22,21 @@ export async function GET() {
   });
 
   let updated = 0;
+  let changed = 0;
   let flashAlertsSent = 0;
   const errors: string[] = [];
+  const slotResults: Array<{
+    id: string;
+    startTime: string;
+    oldPrice: number;
+    newPrice: number;
+    changed: boolean;
+    dLead: number;
+    dPeak: number;
+    dCancel: number;
+    dTotal: number;
+    hoursRemaining: number;
+  }> = [];
 
   for (const slot of slots) {
     try {
@@ -48,6 +61,19 @@ export async function GET() {
       });
 
       updated++;
+      if (oldPrice !== result.currentPrice) changed++;
+      slotResults.push({
+        id: slot.id,
+        startTime: slot.start_time.toISOString(),
+        oldPrice,
+        newPrice: result.currentPrice,
+        changed: oldPrice !== result.currentPrice,
+        dLead: result.dLead,
+        dPeak: result.dPeak,
+        dCancel: result.dCancel,
+        dTotal: result.dTotal,
+        hoursRemaining: Number(result.hoursRemaining.toFixed(2)),
+      });
 
       // Detect first-time D_lead activation → send flash deal (FR-18)
       const justDropped =
@@ -132,8 +158,10 @@ export async function GET() {
 
   return NextResponse.json({
     updated,
+    changed,
     flashAlertsSent,
     remindersSent,
+    slots: slotResults,
     errors,
     timestamp: now.toISOString(),
   });

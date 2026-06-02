@@ -76,7 +76,13 @@ export async function POST(req: NextRequest) {
 
       // 3. Get or create client record
       const authUser = await getUserFromRequest();
-      let client = await tx.client.findUnique({ where: { email } });
+      let client = authUser?.userId
+        ? await tx.client.findUnique({ where: { userId: authUser.userId } })
+        : null;
+
+      if (!client) {
+        client = await tx.client.findUnique({ where: { email } });
+      }
 
       if (!client) {
         client = await tx.client.create({
@@ -85,6 +91,15 @@ export async function POST(req: NextRequest) {
             email,
             phone: phone ?? null,
             userId: authUser?.userId ?? null,
+          },
+        });
+      } else if (authUser?.userId && !client.userId) {
+        client = await tx.client.update({
+          where: { id: client.id },
+          data: {
+            userId: authUser.userId,
+            name: name ?? client.name,
+            phone: phone ?? client.phone,
           },
         });
       }

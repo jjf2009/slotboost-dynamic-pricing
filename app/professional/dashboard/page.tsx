@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import { calculatePrice } from "@/lib/pricing";
 import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,11 @@ import { prisma } from "@/lib/db";
 import { ProfessionalSettings } from "@/components/ProfessionalSettings";
 import { RecentBookings } from "@/components/RecentBookings";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
+  noStore();
+
   const userPayload = await getUserFromRequest();
 
   if (!userPayload) redirect("/login");
@@ -78,7 +83,7 @@ export default async function DashboardPage() {
       slot.demand_index,
     );
 
-    const result = calculatePrice({
+    const pricing = calculatePrice({
       basePrice: professional.base_price,
       startTime: new Date(slot.start_time),
       demandIndex,
@@ -88,7 +93,13 @@ export default async function DashboardPage() {
         ? new Date(slot.d_cancel_expires_at)
         : undefined,
     });
-    return { ...slot, pricing: result };
+    const displayPrice = slot.current_price || pricing.currentPrice;
+    const displayDiscount = Math.max(
+      0,
+      Math.round((1 - displayPrice / professional.base_price) * 100),
+    );
+
+    return { ...slot, demandIndex, pricing, displayPrice, displayDiscount };
   });
 
   return (
@@ -191,7 +202,7 @@ export default async function DashboardPage() {
           ) : (
             <div className="divide-y divide-border/50">
               {slotsWithPrices.map((slot) => {
-                const discount = Math.round(slot.pricing.dTotal * 100);
+                const discount = slot.displayDiscount;
                 const isFlash = slot.pricing.dLead > 0;
                 return (
                   <div
@@ -207,7 +218,7 @@ export default async function DashboardPage() {
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {slot.duration_mins} min · DI:{" "}
-                        {slot.demand_index.toFixed(2)}
+                        {slot.demandIndex.toFixed(2)}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -218,7 +229,7 @@ export default async function DashboardPage() {
                       )}
                       <div className="text-right">
                         <p className="font-bold text-lg">
-                          ₹{slot.pricing.currentPrice}
+                          ₹{slot.displayPrice}
                         </p>
                         {discount > 0 && (
                           <p className="text-xs text-muted-foreground">

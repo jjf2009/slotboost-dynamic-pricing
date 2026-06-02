@@ -2,7 +2,7 @@ import { defineConfig } from '@prisma/config';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const datasourceUrl = process.env.DATABASE_URL || process.env.DIRECT_URL;
+const datasourceUrl = process.env.DIRECT_URL;
 
 if (!datasourceUrl) {
   throw new Error('DATABASE_URL is required for Prisma commands');

@@ -1,13 +1,19 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
 import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
-import { NextResponse } from "next/server";
+import { verifyCronSecret } from "@/lib/cron-auth";
+import { shouldSendFlashDealAlert } from "@/lib/flash-deal-trigger";
+import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/pricing/recalculate
 // Recalculates prices for all open slots in the next 24 hours.
 // Also fires 1-hour appointment reminders (FR-24).
 // Called by a cron job every 15 minutes (vercel.json).
-export async function GET() {
+// Protected by CRON_SECRET (Bearer header or ?secret= query param).
+export async function GET(req: NextRequest) {
+  if (!verifyCronSecret(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const now = new Date();
   const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -75,10 +81,8 @@ export async function GET() {
         hoursRemaining: Number(result.hoursRemaining.toFixed(2)),
       });
 
-      // Detect first-time D_lead activation → send flash deal (FR-18)
-      const justDropped =
-        oldPrice !== null && result.currentPrice < oldPrice && result.dLead > 0;
-      if (justDropped) {
+      // FR-18: alert when H crosses 24h or 2h thresholds (not every price drop)
+      if (shouldSendFlashDealAlert(result.hoursRemaining)) {
         fetch(`${appUrl}/api/notifications/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

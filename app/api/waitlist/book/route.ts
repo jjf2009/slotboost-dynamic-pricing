@@ -84,6 +84,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // FR-26/27: only waitlisted clients may book via this endpoint
+      const waitlistEntry = await tx.waitlist.findUnique({
+        where: { slotId_clientId: { slotId, clientId: client.id } },
+      });
+      if (!waitlistEntry) {
+        throw new Error("NOT_ON_WAITLIST");
+      }
+
       // Create booking
       const booking = await tx.booking.create({
         data: {
@@ -119,10 +127,17 @@ export async function POST(req: NextRequest) {
       include: { client: true },
     });
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     for (const entry of remainingWaitlist) {
-      console.log(
-        `[SMS → ${entry.client.phone ?? entry.client.email}] Slot filled — someone else booked it.`,
-      );
+      fetch(`${appUrl}/api/notifications/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "slot_filled",
+          slotId,
+          clientId: entry.clientId,
+        }),
+      }).catch(console.error);
     }
 
     return NextResponse.json(
@@ -144,6 +159,12 @@ export async function POST(req: NextRequest) {
             "The 10-minute offer window has expired. The slot is available at regular pricing.",
         },
         { status: 410 },
+      );
+    }
+    if (error.message === "NOT_ON_WAITLIST") {
+      return NextResponse.json(
+        { error: "You must be on the waitlist to book this offer." },
+        { status: 403 },
       );
     }
     console.error("Waitlist booking error:", err);

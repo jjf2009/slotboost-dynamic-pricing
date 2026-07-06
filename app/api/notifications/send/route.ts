@@ -137,6 +137,23 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // ── Slot Filled — notify remaining waitlist (FR-27) ───────────────────────
+  if (type === "slot_filled") {
+    if (!clientId) {
+      return NextResponse.json({ error: "clientId required for slot_filled" }, { status: 400 });
+    }
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    await sendWhatsApp(client.phone, {
+      "1": `Slot filled with ${pro.name}`,
+      "2": `${slotTime} — someone else booked it. Keep an eye out for the next opening!`,
+    });
+  }
+
   // ── Appointment Reminder — 1 hour before slot (FR-24) ────────────────────
   if (type === "reminder") {
     if (!clientId) {

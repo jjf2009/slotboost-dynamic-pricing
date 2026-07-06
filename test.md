@@ -30,10 +30,17 @@ DATABASE_URL=
 DIRECT_URL=
 JWT_SECRET=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+CRON_SECRET=
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 NODE_ENV=development
+```
+
+Run automated unit/integration tests:
+
+```bash
+npm test
 ```
 
 ---
@@ -94,9 +101,8 @@ Test:
 5. Refresh page.
 
 Expected:
-- Heat map loads from Prisma API.
+- Heat map loads from Prisma API (`GET/PUT /api/professional/heatmap`).
 - Saved DI values persist.
-- No Supabase errors.
 - No validation error from `/api/professional/heatmap`.
 
 ---
@@ -114,17 +120,19 @@ Test:
 Expected:
 - Slot appears in dashboard.
 - Slot status is `available`.
-- Live price shows discount if slot is under 24 hours.
+- Price shows discount if slot is under 24 hours (computed server-side on dashboard load).
 - Price respects `D_max`.
 
 ---
 
 ## Module 5: Pricing Engine
 
-Manual trigger:
+Manual trigger (requires `CRON_SECRET` — see `lib/cron-auth.ts`):
 
 ```bash
-curl http://localhost:3000/api/pricing/recalculate
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/pricing/recalculate
+# or: curl "http://localhost:3000/api/pricing/recalculate?secret=$CRON_SECRET"
 ```
 
 Test:
@@ -143,6 +151,7 @@ Expected:
 - `H < 2`: 25%.
 - D_peak applies based on demand index.
 - Total discount never exceeds `D_max`.
+- Flash-deal WhatsApp to subscribers fires only when H **crosses below 24h** or **crosses below 2h** (`lib/flash-deal-trigger.ts`), not on every intermediate price drop.
 
 ---
 
@@ -158,19 +167,20 @@ Test:
 
 Expected:
 - Client can see available slots.
-- Live price is visible.
+- Current price is visible (server-computed on page load).
 - Subscribe button works.
 - Subscriber record is created.
 
-Then trigger:
+Then trigger recalculation (with cron secret):
 
 ```bash
-curl http://localhost:3000/api/pricing/recalculate
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/pricing/recalculate
 ```
 
 Expected:
-- Flash deal notification is sent via Twilio if credentials work.
-- If Twilio fails, fallback logs appear.
+- Flash deal WhatsApp sent to subscribers when an H threshold is crossed (24h or 2h).
+- If Twilio credentials are missing, notification route logs a simulation message.
 
 ---
 
@@ -247,22 +257,22 @@ Path:
 ```
 
 Test:
-1. Open the waitlist link as Client B.
+1. Open the waitlist link as Client B (`/waitlist/[slotId]`).
 2. Confirm countdown is visible.
-3. Book within 10 minutes.
+3. Book within 10 minutes via `POST /api/waitlist/book` (the page form calls this endpoint).
 
 Expected:
 - Page shows recovery price.
 - Countdown works.
-- Client B booking succeeds.
+- Client B booking succeeds (Client B must already be on the waitlist).
 - D_cancel is removed.
 - Slot becomes `booked`.
-- Remaining waitlisted clients receive “slot filled” notification.
+- Remaining waitlisted clients receive `slot_filled` WhatsApp via `/api/notifications/send`.
 
-Also test with a non-waitlisted email.
+Also test with a non-waitlisted email (not on waitlist for this slot).
 
 Expected:
-- Booking is blocked with `403`.
+- `POST /api/waitlist/book` returns **403** (`app/api/waitlist/book/route.ts` — waitlist membership check).
 
 ---
 
@@ -321,4 +331,4 @@ Your MVP is demo-ready when:
 - Client booking works.
 - Waitlist recovery works.
 - Twilio either sends real WhatsApp or clearly logs fallback.
-- No Google Maps/payment features are shown as required MVP features.
+- Geo uses OSRM + Nominatim (not Google Maps); Razorpay/subscriptions are stretch goals only.

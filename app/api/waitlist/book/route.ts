@@ -53,7 +53,14 @@ export async function POST(req: NextRequest) {
 
       // Get or create client
       const authUser = await getUserFromRequest();
-      let client = await tx.client.findUnique({ where: { email } });
+      let client = authUser?.userId
+        ? await tx.client.findUnique({ where: { userId: authUser.userId } })
+        : null;
+
+      if (!client) {
+        client = await tx.client.findUnique({ where: { email } });
+      }
+
       if (!client) {
         client = await tx.client.create({
           data: {
@@ -63,6 +70,18 @@ export async function POST(req: NextRequest) {
             userId: authUser?.userId ?? null,
           },
         });
+      } else {
+        const updateData: { name?: string; phone?: string | null; userId?: string | null } = {};
+        if (name && name !== client.name) updateData.name = name;
+        if (phone && phone !== client.phone) updateData.phone = phone;
+        if (authUser?.userId && !client.userId) updateData.userId = authUser.userId;
+
+        if (Object.keys(updateData).length > 0) {
+          client = await tx.client.update({
+            where: { id: client.id },
+            data: updateData,
+          });
+        }
       }
 
       // Create booking

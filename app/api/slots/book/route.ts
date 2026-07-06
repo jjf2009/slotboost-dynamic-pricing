@@ -34,9 +34,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slotId and email are required" }, { status: 400 });
   }
 
+  // 1. Pre-fetch slot outside transaction to perform geocoding check (prevents loopback HTTP deadlock & P2028 timeout)
+  const slotPre = await prisma.slot.findUnique({
+    where: { id: slotId },
+    include: { professional: true },
+  });
+
+  if (!slotPre || slotPre.status !== "available") {
+    return NextResponse.json(
+      { error: "Slot not available. Would you like to join the waitlist?" },
+      { status: 409 }
+    );
+  }
+
+  // FR-28/29: Geo-check for mobile professionals (run OUTSIDE database transaction)
+  if (slotPre.professional.is_mobile) {
+    if (!clientLocation) {
+      return NextResponse.json(
+        { error: "Please enter your location/address so we can check this mobile professional's travel time." },
+        { status: 400 }
+      );
+    }
+    const origin = previousJobLocation || "Panaji, Goa";
+    const geo = await runGeoCheck(origin, clientLocation, slotPre.start_time);
+    if (!geo.allowed) {
+      return NextResponse.json(
+        { error: "This professional is not available in your area for this time slot." },
+        { status: 403 }
+      );
+    }
+  }
+
   try {
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Lock and verify slot is available
+      // 2. Lock and verify slot is available
       const slot = await tx.slot.findUnique({
         where: { id: slotId },
         include: { professional: true },
@@ -44,20 +75,6 @@ export async function POST(req: NextRequest) {
 
       if (!slot || slot.status !== "available") {
         throw new Error("SLOT_NOT_AVAILABLE");
-      }
-
-      // FR-28/29: Geo-check for mobile professionals
-      // clientLocation & previousJobLocation are optional strings like "Panaji, Goa"
-      if (slot.professional.is_mobile && clientLocation) {
-        const origin = previousJobLocation || "Panaji, Goa"; // fallback origin
-        const geo = await runGeoCheck(origin, clientLocation, slot.start_time);
-        if (!geo.allowed) {
-          throw new Error("GEO_BLOCKED");
-        }
-      }
-
-      if (slot.professional.is_mobile && !clientLocation) {
-        throw new Error("GEO_LOCATION_REQUIRED");
       }
 
       // 2. Recalculate price at moment of booking (FR-19 — prevent stale price exploit)
@@ -93,15 +110,18 @@ export async function POST(req: NextRequest) {
             userId: authUser?.userId ?? null,
           },
         });
-      } else if (authUser?.userId && !client.userId) {
-        client = await tx.client.update({
-          where: { id: client.id },
-          data: {
-            userId: authUser.userId,
-            name: name ?? client.name,
-            phone: phone ?? client.phone,
-          },
-        });
+      } else {
+        const updateData: { name?: string; phone?: string | null; userId?: string | null } = {};
+        if (name && name !== client.name) updateData.name = name;
+        if (phone && phone !== client.phone) updateData.phone = phone;
+        if (authUser?.userId && !client.userId) updateData.userId = authUser.userId;
+
+        if (Object.keys(updateData).length > 0) {
+          client = await tx.client.update({
+            where: { id: client.id },
+            data: updateData,
+          });
+        }
       }
 
       // 4. Atomically claim the slot before creating the booking (FR-20)

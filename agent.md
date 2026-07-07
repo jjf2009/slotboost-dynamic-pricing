@@ -1,18 +1,24 @@
 # SlotBoost – Implementation Guide
-## Next.js + Supabase + shadcn/ui
 
----
+> **⚠️ Historical scaffold — partially outdated.**  
+> The running app uses **Next.js 15**, **JWT auth**, **Prisma + PostgreSQL**, **OSRM/Nominatim geo**, and **Twilio WhatsApp**.  
+> Sections below marked **(scaffold)** describe an earlier Supabase/Google Maps plan.  
+> **Source of truth:** `README.md`, `STATUS.md`, and the `app/`, `lib/`, `prisma/` directories.
 
-## Tech Stack
+## Actual Tech Stack (as implemented)
 
 | Layer | Choice |
 |---|---|
-| Frontend | Next.js 14 (App Router) |
-| UI Components | shadcn/ui + Tailwind CSS |
-| Backend / DB | Supabase (Postgres + Auth + Realtime + Edge Functions) |
-| Notifications | Twilio SMS / WhatsApp |
-| Geo | Google Maps Distance Matrix API |
-| Deployment | Vercel (frontend) + Supabase hosted |
+| Frontend | Next.js 15 (App Router), React 19 |
+| UI Components | shadcn/ui + Tailwind CSS 4 |
+| Auth | JWT httpOnly cookies — `lib/getUser.ts`, `lib/services/auth.service.ts` |
+| Database | PostgreSQL via Prisma — `prisma/schema.prisma`, `lib/db.ts` |
+| Notifications | Twilio WhatsApp sandbox — `app/api/notifications/send/route.ts` |
+| Geo | OSRM + Nominatim (free) — `app/api/geo/check/route.ts` |
+| Pricing cron | Vercel cron + `CRON_SECRET` — `app/api/pricing/recalculate/route.ts`, `lib/cron-auth.ts` |
+| Deployment | Vercel |
+
+**Not used in MVP:** Supabase Auth/Realtime, Google Maps, Zustand `authStore`, `hooks/use-live-slot.ts` (dead code).
 
 ---
 
@@ -30,36 +36,43 @@ npx shadcn@latest init
 npx shadcn@latest add button card table badge input label dialog sheet
 npx shadcn@latest add select slider toast calendar form
 
-# Supabase client
-npm install @supabase/supabase-js @supabase/ssr
+# Prisma + PostgreSQL
+npm install prisma @prisma/client pg @prisma/adapter-pg
 
 # Extras
-npm install twilio @googlemaps/google-maps-services-js
-npm install date-fns zod react-hook-form @hookform/resolvers
+npm install twilio bcrypt jsonwebtoken jose zod date-fns
 ```
 
 ---
 
-## 2. Environment Variables
+## 2. Environment Variables (actual)
 
-Create `.env.local`:
+Create `.env.local` (see `.env.example`):
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+DATABASE_URL=your_postgres_connection_string
+DIRECT_URL=your_postgres_direct_connection_string
+JWT_SECRET=your_jwt_secret
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NODE_ENV=development
+
+CRON_SECRET=your_cron_secret
 
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
-
-GOOGLE_MAPS_API_KEY=your_google_maps_key
 ```
+
+**Cron auth:** `GET /api/pricing/recalculate` requires `Authorization: Bearer <CRON_SECRET>` or `?secret=<CRON_SECRET>` (`lib/cron-auth.ts`).
 
 ---
 
-## 3. Supabase Database Schema
+## 3. Database Schema (scaffold — use Prisma instead)
+
+> **Use `prisma/schema.prisma` and `npx prisma db push`**, not the Supabase SQL below.
+
+## 3a. Supabase SQL (historical reference only)
 
 Run this in the Supabase SQL editor:
 
@@ -301,7 +314,7 @@ slotboost/
 │       ├── slots/book/route.ts             ← booking endpoint
 │       ├── slots/cancel/route.ts           ← cancellation endpoint
 │       ├── notifications/send/route.ts     ← Twilio wrapper
-│       └── geo/check/route.ts             ← Google Maps distance check
+│       └── geo/check/route.ts             ← OSRM + Nominatim geo check
 ├── components/
 │   ├── SlotCard.tsx                 ← shows slot + live price + countdown
 │   ├── HeatMapGrid.tsx              ← 7×24 grid with sliders
@@ -938,88 +951,34 @@ export function WaitlistCountdown({ expiresAt, slotId, price, onBook, onExpire }
 
 ---
 
-## 9. Supabase Realtime — Live Price Updates
+## 9. Price Updates (actual behavior)
 
-Use Supabase Realtime on the booking page so the price updates live for all clients watching the same slot.
+**There is no live push subscription in the MVP.** CurrentPrice is:
 
-```tsx
-// In your booking page component
-'use client'
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+1. Recalculated every 15 minutes by the cron job (`app/api/pricing/recalculate/route.ts`).
+2. Computed server-side when pages load (`app/professional/dashboard/page.tsx`, `app/book/[slotId]/page.tsx`, slot API routes via `lib/pricing.ts`).
+3. Recalculated at booking time in `app/api/slots/book/route.ts`.
 
-export function useLiveSlot(slotId: string, initialSlot: any) {
-  const [slot, setSlot] = useState(initialSlot)
-  const supabase = createClient()
+`hooks/use-live-slot.ts` exists but is **never imported** — it targets Supabase Realtime and is dead code. Prices refresh when the user reloads or navigates, not automatically in the background.
 
-  useEffect(() => {
-    const channel = supabase
-      .channel(`slot-${slotId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'slots', filter: `id=eq.${slotId}` },
-        (payload) => setSlot(payload.new)
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [slotId])
-
-  return slot
-}
-```
-
-Enable Realtime on the `slots` table in the Supabase dashboard:
-**Database → Replication → supabase_realtime publication → Add table → slots**
+**FR-18 flash alerts:** `lib/flash-deal-trigger.ts` sends subscriber WhatsApp only when H crosses below 24h or 2h during a cron tick.
 
 ---
 
-## 10. Supabase Auth Setup
+## 10. Auth Setup (actual — JWT, not Supabase)
 
 ```tsx
-// app/(auth)/login/page.tsx
-'use client'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-
-export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'professional' | 'client'>('client')
-  const router = useRouter()
-  const supabase = createClient()
-
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { alert(error.message); return }
-    router.push(role === 'professional' ? '/professional/dashboard' : '/')
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Card className="w-full max-w-sm">
-        <CardHeader><CardTitle>Sign in to SlotBoost</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label>Email</Label>
-            <Input value={email} onChange={e => setEmail(e.target.value)} type="email" />
-          </div>
-          <div className="space-y-1">
-            <Label>Password</Label>
-            <Input value={password} onChange={e => setPassword(e.target.value)} type="password" />
-          </div>
-          <Button className="w-full" onClick={handleLogin}>Sign In</Button>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+// app/(auth)/login/page.tsx — calls POST /api/login
+// lib/services/auth.service.ts — bcrypt + jwt.sign
+// lib/getUser.ts — reads httpOnly cookie, jose verifyToken
+// app/api/auth/logout/route.ts — clears cookie
 ```
+
+Register: `POST /api/register` with Zod validation. Role (`professional` | `client`) creates the matching Prisma profile.
+
+**Waitlist booking gate:** `POST /api/waitlist/book` returns 403 if the client has no waitlist entry for the slot.
+
+**Slot-filled notify (FR-27):** After waitlist booking, remaining entries receive `type: slot_filled` via `/api/notifications/send`.
 
 ---
 

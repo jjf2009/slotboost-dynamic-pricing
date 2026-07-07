@@ -30,11 +30,20 @@ export async function createSlotAction(formData: {
     throw new Error("Slot must be in the future");
   }
 
+  const heatMap =
+    professional.heat_map &&
+    typeof professional.heat_map === "object" &&
+    !Array.isArray(professional.heat_map)
+      ? (professional.heat_map as Record<string, number>)
+      : {};
+  const heatMapKey = `${["mon", "tue", "wed", "thu", "fri", "sat", "sun"][(startTime.getDay() + 6) % 7]}_${String(startTime.getHours()).padStart(2, "0")}`;
+  const demandIndex = heatMap[heatMapKey] ?? formData.demandIndex ?? 0.5;
+
   // Calculate initial price using the pricing engine
   const { currentPrice } = calculatePrice({
     basePrice: professional.base_price,
     startTime,
-    demandIndex: formData.demandIndex ?? 1.0,
+    demandIndex,
     dMax: professional.d_max,
     dCancelActive: false,
   });
@@ -44,7 +53,7 @@ export async function createSlotAction(formData: {
       professionalId: professional.id,
       start_time: startTime,
       duration_mins: formData.duration ?? 60,
-      demand_index: formData.demandIndex ?? 1.0,
+      demand_index: demandIndex,
       current_price: currentPrice,
       status: "available",
     },
@@ -67,7 +76,8 @@ export async function deleteSlotAction(slotId: string) {
   });
 
   if (!slot) throw new Error("Slot not found");
-  if (slot.professional.userId !== userPayload.userId) throw new Error("Forbidden");
+  if (slot.professional.userId !== userPayload.userId)
+    throw new Error("Forbidden");
 
   // FR-06: Block deletion if slot is booked
   if (slot.status === "booked") {

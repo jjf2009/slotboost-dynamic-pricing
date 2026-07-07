@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { BookingForm } from "@/components/BookingForm";
@@ -24,7 +25,11 @@ export default async function BookingPage({ params }: Props) {
   const result = calculatePrice({
     basePrice: pro.base_price,
     startTime: new Date(slot.start_time),
-    demandIndex: slot.demand_index,
+    demandIndex: getDemandIndexFromHeatMap(
+      pro.heat_map,
+      slot.start_time,
+      slot.demand_index,
+    ),
     dMax: pro.d_max,
     dCancelActive: slot.d_cancel_active,
     dCancelExpiry: slot.d_cancel_expires_at
@@ -41,7 +46,10 @@ export default async function BookingPage({ params }: Props) {
         <div className="text-center mb-10">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="bg-primary p-1.5 rounded-xl">
-              <Lightning weight="fill" className="text-primary-foreground w-4 h-4" />
+              <Lightning
+                weight="fill"
+                className="text-primary-foreground w-4 h-4"
+              />
             </div>
             <span className="font-bold tracking-tight text-lg">
               Slot<span className="text-gradient">Boost</span>
@@ -52,13 +60,17 @@ export default async function BookingPage({ params }: Props) {
               ⚡ {discount}% off — Limited Time
             </Badge>
           )}
-          <h1 className="text-2xl font-bold tracking-tight mb-2">Book with {pro.name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight mb-2">
+            Book with {pro.name}
+          </h1>
           <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <Clock weight="bold" className="w-4 h-4" />{slotTime}
+              <Clock weight="bold" className="w-4 h-4" />
+              {slotTime}
             </span>
             <span className="flex items-center gap-1.5">
-              <MapPin weight="bold" className="w-4 h-4" />{slot.duration_mins} min
+              <MapPin weight="bold" className="w-4 h-4" />
+              {slot.duration_mins} min
             </span>
           </div>
         </div>

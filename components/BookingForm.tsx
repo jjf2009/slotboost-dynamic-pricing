@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -25,11 +26,28 @@ export function BookingForm({
   professionalName,
   slotTime,
 }: BookingFormProps) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [booked, setBooked] = useState(false);
+  const [countdown, setCountdown] = useState(4);
+
+  useEffect(() => {
+    if (booked) {
+      const interval = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+      const timer = setTimeout(() => {
+        router.push("/client/dashboard");
+      }, 4000);
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+      };
+    }
+  }, [booked, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +91,17 @@ export function BookingForm({
           <p className="text-sm text-muted-foreground">
             A confirmation SMS has been sent to your phone.
           </p>
+          <div className="pt-4 space-y-2">
+            <Button
+              onClick={() => router.push("/client/dashboard")}
+              className="w-full h-11 rounded-xl font-bold"
+            >
+              Go to Dashboard Now
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Redirecting to dashboard in {countdown}s...
+            </p>
+          </div>
         </CardContent>
       </Card>
     );

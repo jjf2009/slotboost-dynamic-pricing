@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/db";
 import { getUserFromRequest } from "@/lib/getUser";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/slots/[id] → single slot with live price
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
@@ -22,7 +23,11 @@ export async function GET(
   const livePrice = calculatePrice({
     basePrice: slot.professional.base_price,
     startTime: slot.start_time,
-    demandIndex: slot.demand_index,
+    demandIndex: getDemandIndexFromHeatMap(
+      slot.professional.heat_map,
+      slot.start_time,
+      slot.demand_index,
+    ),
     dMax: slot.professional.d_max,
     dCancelActive: slot.d_cancel_active,
     dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -34,7 +39,7 @@ export async function GET(
 // DELETE /api/slots/[id] → delete slot, block if booked (FR-06)
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getUserFromRequest();
   if (!user || user.role !== "professional") {
@@ -61,7 +66,7 @@ export async function DELETE(
   if (slot.status === "booked") {
     return NextResponse.json(
       { error: "Cannot delete a slot that has an active booking." },
-      { status: 409 }
+      { status: 409 },
     );
   }
 

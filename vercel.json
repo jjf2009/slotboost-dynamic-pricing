@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/pricing/recalculate",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     }
 
 

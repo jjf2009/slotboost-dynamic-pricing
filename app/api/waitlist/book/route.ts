@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { getUserFromRequest } from "@/lib/getUser";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -9,7 +10,10 @@ export async function POST(req: NextRequest) {
   const { slotId, email, name, phone } = await req.json();
 
   if (!slotId || !email) {
-    return NextResponse.json({ error: "slotId and email are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "slotId and email are required" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -25,7 +29,11 @@ export async function POST(req: NextRequest) {
 
       // FR-26: Check the 10-minute offer window
       const now = new Date();
-      if (!slot.d_cancel_active || !slot.d_cancel_expires_at || now > slot.d_cancel_expires_at) {
+      if (
+        !slot.d_cancel_active ||
+        !slot.d_cancel_expires_at ||
+        now > slot.d_cancel_expires_at
+      ) {
         throw new Error("OFFER_EXPIRED");
       }
 
@@ -33,7 +41,11 @@ export async function POST(req: NextRequest) {
       const { currentPrice } = calculatePrice({
         basePrice: slot.professional.base_price,
         startTime: slot.start_time,
-        demandIndex: slot.demand_index,
+        demandIndex: getDemandIndexFromHeatMap(
+          slot.professional.heat_map,
+          slot.start_time,
+          slot.demand_index,
+        ),
         dMax: slot.professional.d_max,
         dCancelActive: true,
         dCancelExpiry: slot.d_cancel_expires_at,
@@ -41,49 +53,43 @@ export async function POST(req: NextRequest) {
 
       // Get or create client
       const authUser = await getUserFromRequest();
-      let client = await tx.client.findUnique({ where: { email } });
+      let client = authUser?.userId
+        ? await tx.client.findUnique({ where: { userId: authUser.userId } })
+        : null;
 
       if (!client) {
-        throw new Error("NOT_WAITLISTED");
+        client = await tx.client.findUnique({ where: { email } });
       }
 
-      const waitlistEntry = await tx.waitlist.findUnique({
-        where: {
-          slotId_clientId: {
-            slotId,
-            clientId: client.id,
-          },
-        },
-      });
-
-      if (!waitlistEntry) {
-        throw new Error("NOT_WAITLISTED");
-      }
-
-      if (authUser?.userId && !client.userId) {
-        client = await tx.client.update({
-          where: { id: client.id },
+      if (!client) {
+        client = await tx.client.create({
           data: {
-            userId: authUser.userId,
-            name: name ?? client.name,
-            phone: phone ?? client.phone,
+            name: name ?? email,
+            email,
+            phone: phone ?? null,
+            userId: authUser?.userId ?? null,
           },
         });
+      } else {
+        const updateData: { name?: string; phone?: string | null; userId?: string | null } = {};
+        if (name && name !== client.name) updateData.name = name;
+        if (phone && phone !== client.phone) updateData.phone = phone;
+        if (authUser?.userId && !client.userId) updateData.userId = authUser.userId;
+
+        if (Object.keys(updateData).length > 0) {
+          client = await tx.client.update({
+            where: { id: client.id },
+            data: updateData,
+          });
+        }
       }
 
-      // Atomically claim the slot for first-come-first-served behavior (FR-27)
-      const claimed = await tx.slot.updateMany({
-        where: { id: slotId, status: "available" },
-        data: {
-          status: "booked",
-          current_price: currentPrice,
-          d_cancel_active: false,
-          d_cancel_expires_at: null,
-        },
+      // FR-26/27: only waitlisted clients may book via this endpoint
+      const waitlistEntry = await tx.waitlist.findUnique({
+        where: { slotId_clientId: { slotId, clientId: client.id } },
       });
-
-      if (claimed.count === 0) {
-        throw new Error("SLOT_NOT_AVAILABLE");
+      if (!waitlistEntry) {
+        throw new Error("NOT_ON_WAITLIST");
       }
 
       // Create booking
@@ -96,6 +102,17 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Mark slot as booked, deactivate D_cancel (FR-27)
+      await tx.slot.update({
+        where: { id: slotId },
+        data: {
+          status: "booked",
+          current_price: currentPrice,
+          d_cancel_active: false,
+          d_cancel_expires_at: null,
+        },
+      });
+
       // Remove the booking client from waitlist
       await tx.waitlist.deleteMany({
         where: { slotId, clientId: client.id },
@@ -105,31 +122,49 @@ export async function POST(req: NextRequest) {
     });
 
     // Notify remaining waitlisted clients "slot filled" (FR-27)
+    const remainingWaitlist = await prisma.waitlist.findMany({
+      where: { slotId },
+      include: { client: true },
+    });
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    await fetch(`${appUrl}/api/notifications/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "slot_filled", slotId }),
-    }).catch(console.error);
+    for (const entry of remainingWaitlist) {
+      fetch(`${appUrl}/api/notifications/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "slot_filled",
+          slotId,
+          clientId: entry.clientId,
+        }),
+      }).catch(console.error);
+    }
 
-    await prisma.waitlist.deleteMany({ where: { slotId } });
-
-    return NextResponse.json({ booking: result.booking, price: result.currentPrice }, { status: 201 });
+    return NextResponse.json(
+      { booking: result.booking, price: result.currentPrice },
+      { status: 201 },
+    );
   } catch (err: unknown) {
     const error = err as Error;
     if (error.message === "SLOT_NOT_AVAILABLE") {
-      return NextResponse.json({ error: "Slot no longer available." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Slot no longer available." },
+        { status: 409 },
+      );
     }
     if (error.message === "OFFER_EXPIRED") {
       return NextResponse.json(
-        { error: "The 10-minute offer window has expired. The slot is available at regular pricing." },
-        { status: 410 }
+        {
+          error:
+            "The 10-minute offer window has expired. The slot is available at regular pricing.",
+        },
+        { status: 410 },
       );
     }
-    if (error.message === "NOT_WAITLISTED") {
+    if (error.message === "NOT_ON_WAITLIST") {
       return NextResponse.json(
-        { error: "Only clients already on this waitlist can claim the recovery offer." },
-        { status: 403 }
+        { error: "You must be on the waitlist to book this offer." },
+        { status: 403 },
       );
     }
     console.error("Waitlist booking error:", err);

@@ -15,6 +15,7 @@ const globalForPrisma = globalThis as unknown as {
 const prismaClientSingleton = () => {
   const pool = new Pool({
     connectionString,
+    max: 1,
   });
 
   const adapter = new PrismaPg(pool);

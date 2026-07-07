@@ -8,8 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 // GET /api/pricing/recalculate
 // Recalculates prices for all open slots in the next 24 hours.
 // Also fires 1-hour appointment reminders (FR-24).
-// Called by a cron job every 15 minutes (vercel.json).
+// Primary: external cron every 15 min (Hobby plan). Fallback: vercel.json daily.
 // Protected by CRON_SECRET (Bearer header or ?secret= query param).
+export const runtime = "nodejs";
+export const maxDuration = 10;
+
 export async function GET(req: NextRequest) {
   if (!verifyCronSecret(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

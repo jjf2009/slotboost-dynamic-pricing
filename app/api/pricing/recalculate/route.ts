@@ -1,12 +1,22 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
-import { NextResponse } from "next/server";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
+import { verifyCronSecret } from "@/lib/cron-auth";
+import { shouldSendFlashDealAlert } from "@/lib/flash-deal-trigger";
+import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/pricing/recalculate
 // Recalculates prices for all open slots in the next 24 hours.
 // Also fires 1-hour appointment reminders (FR-24).
-// Called by a cron job every 15 minutes (vercel.json).
-export async function GET() {
+// Primary: external cron every 15 min (Hobby plan). Fallback: vercel.json daily.
+// Protected by CRON_SECRET (Bearer header or ?secret= query param).
+export const runtime = "nodejs";
+export const maxDuration = 10;
+
+export async function GET(req: NextRequest) {
+  if (!verifyCronSecret(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const now = new Date();
   const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -21,8 +31,21 @@ export async function GET() {
   });
 
   let updated = 0;
+  let changed = 0;
   let flashAlertsSent = 0;
   const errors: string[] = [];
+  const slotResults: Array<{
+    id: string;
+    startTime: string;
+    oldPrice: number;
+    newPrice: number;
+    changed: boolean;
+    dLead: number;
+    dPeak: number;
+    dCancel: number;
+    dTotal: number;
+    hoursRemaining: number;
+  }> = [];
 
   for (const slot of slots) {
     try {
@@ -31,7 +54,11 @@ export async function GET() {
       const result = calculatePrice({
         basePrice: slot.professional.base_price,
         startTime: slot.start_time,
-        demandIndex: slot.demand_index,
+        demandIndex: getDemandIndexFromHeatMap(
+          slot.professional.heat_map,
+          slot.start_time,
+          slot.demand_index,
+        ),
         dMax: slot.professional.d_max,
         dCancelActive: slot.d_cancel_active,
         dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -43,10 +70,22 @@ export async function GET() {
       });
 
       updated++;
+      if (oldPrice !== result.currentPrice) changed++;
+      slotResults.push({
+        id: slot.id,
+        startTime: slot.start_time.toISOString(),
+        oldPrice,
+        newPrice: result.currentPrice,
+        changed: oldPrice !== result.currentPrice,
+        dLead: result.dLead,
+        dPeak: result.dPeak,
+        dCancel: result.dCancel,
+        dTotal: result.dTotal,
+        hoursRemaining: Number(result.hoursRemaining.toFixed(2)),
+      });
 
-      // Detect first-time D_lead activation → send flash deal (FR-18)
-      const justDropped = oldPrice !== null && result.currentPrice < oldPrice && result.dLead > 0;
-      if (justDropped) {
+      // FR-18: alert when H crosses 24h or 2h thresholds (not every price drop)
+      if (shouldSendFlashDealAlert(result.hoursRemaining)) {
         fetch(`${appUrl}/api/notifications/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -126,8 +165,10 @@ export async function GET() {
 
   return NextResponse.json({
     updated,
+    changed,
     flashAlertsSent,
     remindersSent,
+    slots: slotResults,
     errors,
     timestamp: now.toISOString(),
   });

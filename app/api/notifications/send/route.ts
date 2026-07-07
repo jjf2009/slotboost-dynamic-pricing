@@ -3,12 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { format } from "date-fns";
 import twilio from "twilio";
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioWhatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER || "whatsapp:+14155238886";
-
-// Initialize Twilio client using environment variables
-const twilioClient = accountSid && authToken ? twilio(accountSid, authToken) : null;
+const twilioWhatsappNumber = "whatsapp:+14155238886";
 
 // FR-21/24/25/26/27: Send free template-approved WhatsApp messages via Twilio Sandbox
 async function sendWhatsApp(to: string | null, contentVariables: { "1": string; "2": string }) {
@@ -17,10 +12,20 @@ async function sendWhatsApp(to: string | null, contentVariables: { "1": string; 
   // Format target number to whatsapp:+<number> format
   let formattedTo = to.trim();
   if (!formattedTo.startsWith("whatsapp:")) {
-    formattedTo = `whatsapp:${formattedTo.replace(/[\s+-]+/g, "")}`;
+    // Strip everything except digits
+    let digits = formattedTo.replace(/\D/g, "");
+    // If it's a 10-digit number, prepend Indian country code 91 (common for +91)
+    if (digits.length === 10) {
+      digits = `91${digits}`;
+    }
+    formattedTo = `whatsapp:+${digits}`;
   }
 
   console.log(`[Twilio WhatsApp → ${formattedTo}] Sending variables:`, contentVariables);
+
+  const activeAccountSid = process.env.TWILIO_ACCOUNT_SID;
+  const activeAuthToken = process.env.TWILIO_AUTH_TOKEN;
+  const twilioClient = activeAccountSid && activeAuthToken ? twilio(activeAccountSid, activeAuthToken) : null;
 
   if (twilioClient) {
     try {
@@ -129,6 +134,23 @@ export async function POST(req: NextRequest) {
     await sendWhatsApp(client.phone, {
       "1": `❌ Cancelled by ${pro.name}`,
       "2": `${slotTime} (Full refund will be processed)`
+    });
+  }
+
+  // ── Slot Filled — notify remaining waitlist (FR-27) ───────────────────────
+  if (type === "slot_filled") {
+    if (!clientId) {
+      return NextResponse.json({ error: "clientId required for slot_filled" }, { status: 400 });
+    }
+
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 });
+    }
+
+    await sendWhatsApp(client.phone, {
+      "1": `Slot filled with ${pro.name}`,
+      "2": `${slotTime} — someone else booked it. Keep an eye out for the next opening!`,
     });
   }
 

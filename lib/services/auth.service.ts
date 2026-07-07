@@ -1,7 +1,7 @@
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import { UserModel } from '../models/user.model';
-import { prisma } from '../db';
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { UserModel } from "../models/user.model";
+import { prisma } from "../db";
 
 export interface RegisterInput {
   name: string;
@@ -23,7 +23,7 @@ export class AuthService {
 
     // Enforce unique constraint
     const existingUser = await UserModel.findByEmail(email);
-    if (existingUser) throw new Error('USER_ALREADY_EXISTS');
+    if (existingUser) throw new Error("USER_ALREADY_EXISTS");
 
     // NFR-03: bcrypt with 12 salt rounds
     const passwordHash = await bcrypt.hash(password, 12);
@@ -31,7 +31,13 @@ export class AuthService {
     // Create user with role persisted directly
     const newUser = await prisma.user.create({
       data: { name, email, password_hash: passwordHash, role },
-      select: { id: true, name: true, email: true, role: true, created_at: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        created_at: true,
+      },
     });
 
     // Create role-specific profile
@@ -40,6 +46,7 @@ export class AuthService {
         data: {
           userId: newUser.id,
           name,
+          email,
           phone: phone ?? null,
           service_type: serviceType ?? null,
           base_price: 500,
@@ -58,11 +65,12 @@ export class AuthService {
       });
     }
 
-    const jwtSecret = process.env.JWT_SECRET || 'fallback_secret_for_development';
+    const jwtSecret =
+      process.env.JWT_SECRET || "fallback_secret_for_development";
     const token = jwt.sign(
       { userId: newUser.id, email: newUser.email, role },
       jwtSecret,
-      { expiresIn: '50d' }
+      { expiresIn: "50d" },
     );
 
     return { user: newUser, token };
@@ -77,13 +85,14 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) throw new Error("INVALID_CREDENTIALS");
 
-    const jwtSecret = process.env.JWT_SECRET || "fallback_secret_for_development";
+    const jwtSecret =
+      process.env.JWT_SECRET || "fallback_secret_for_development";
 
     // Role is now stored on the user row — no extra query needed
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
       jwtSecret,
-      { expiresIn: "50d" }
+      { expiresIn: "50d" },
     );
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

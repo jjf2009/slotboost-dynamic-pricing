@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,11 @@ import { prisma } from "@/lib/db";
 import { ProfessionalSettings } from "@/components/ProfessionalSettings";
 import { RecentBookings } from "@/components/RecentBookings";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
+  noStore();
+
   const userPayload = await getUserFromRequest();
 
   if (!userPayload) redirect("/login");
@@ -66,22 +72,34 @@ export default async function DashboardPage() {
   const bookedSlots = slots.filter((s) => s.status === "booked");
   const totalRevenue = bookings.reduce(
     (sum, b) => sum + (b.price_paid || 0),
-    0
+    0,
   );
 
   // Calculate live prices
   const slotsWithPrices = availableSlots.map((slot) => {
-    const result = calculatePrice({
+    const demandIndex = getDemandIndexFromHeatMap(
+      professional.heat_map,
+      slot.start_time,
+      slot.demand_index,
+    );
+
+    const pricing = calculatePrice({
       basePrice: professional.base_price,
       startTime: new Date(slot.start_time),
-      demandIndex: slot.demand_index,
+      demandIndex,
       dMax: professional.d_max,
       dCancelActive: slot.d_cancel_active,
       dCancelExpiry: slot.d_cancel_expires_at
         ? new Date(slot.d_cancel_expires_at)
         : undefined,
     });
-    return { ...slot, pricing: result };
+    const displayPrice = slot.current_price || pricing.currentPrice;
+    const displayDiscount = Math.max(
+      0,
+      Math.round((1 - displayPrice / professional.base_price) * 100),
+    );
+
+    return { ...slot, demandIndex, pricing, displayPrice, displayDiscount };
   });
 
   return (
@@ -95,7 +113,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <ProfessionalSettings 
+          <ProfessionalSettings
             initialBasePrice={professional.base_price}
             initialDMax={professional.d_max}
           />
@@ -149,7 +167,10 @@ export default async function DashboardPage() {
                 <div
                   className={`w-9 h-9 rounded-xl ${stat.bg} flex items-center justify-center`}
                 >
-                  <stat.icon weight="duotone" className={`w-5 h-5 ${stat.color}`} />
+                  <stat.icon
+                    weight="duotone"
+                    className={`w-5 h-5 ${stat.color}`}
+                  />
                 </div>
               </div>
               <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
@@ -169,7 +190,10 @@ export default async function DashboardPage() {
         <CardContent>
           {slotsWithPrices.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              <Clock weight="duotone" className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <Clock
+                weight="duotone"
+                className="w-12 h-12 mx-auto mb-3 opacity-50"
+              />
               <p className="font-medium">No available slots</p>
               <p className="text-sm mt-1">
                 Create your first slot to start receiving bookings.
@@ -178,7 +202,7 @@ export default async function DashboardPage() {
           ) : (
             <div className="divide-y divide-border/50">
               {slotsWithPrices.map((slot) => {
-                const discount = Math.round(slot.pricing.dTotal * 100);
+                const discount = slot.displayDiscount;
                 const isFlash = slot.pricing.dLead > 0;
                 return (
                   <div
@@ -189,11 +213,12 @@ export default async function DashboardPage() {
                       <p className="font-semibold">
                         {format(
                           new Date(slot.start_time),
-                          "EEE, dd MMM · h:mm a"
+                          "EEE, dd MMM · h:mm a",
                         )}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {slot.duration_mins} min · DI: {slot.demand_index}
+                        {slot.duration_mins} min · DI:{" "}
+                        {slot.demandIndex.toFixed(2)}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -204,7 +229,7 @@ export default async function DashboardPage() {
                       )}
                       <div className="text-right">
                         <p className="font-bold text-lg">
-                          ₹{slot.pricing.currentPrice}
+                          ₹{slot.displayPrice}
                         </p>
                         {discount > 0 && (
                           <p className="text-xs text-muted-foreground">

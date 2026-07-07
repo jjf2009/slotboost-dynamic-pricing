@@ -65,16 +65,16 @@ Section 2 provides an overall description of the product, users, and operating e
 
 **2.1 Product Perspective**
 
-SlotBoost is a standalone web application - not a plugin or module for an existing platform. It interacts with three external services: Twilio (for SMS and WhatsApp notifications), Google Maps Distance Matrix API (for geo-fill travel time checks), and a payment gateway (for subscription billing). All data is stored in a PostgreSQL database hosted on Railway. The frontend is served from Vercel.
+SlotBoost is a standalone web application - not a plugin or module for an existing platform. **As implemented (July 2026):** the MVP uses Twilio WhatsApp sandbox for notifications, OSRM + Nominatim (free) for geo-fill travel checks (`app/api/geo/check/route.ts`), and PostgreSQL via Prisma (`prisma/schema.prisma`). Auth is JWT in httpOnly cookies, not a third-party auth provider. A payment gateway (Razorpay) is a stretch goal only. The frontend is served from Vercel.
 
 **2.2 Product Functions (Summary)**
 
 - Dynamic pricing: automatically calculate CurrentPrice using the formula CurrentPrice = BasePrice × (1 − D_total).
-- Flash-deal notifications: send SMS/WhatsApp alerts to subscribed clients when a slot's price drops.
-- Booking management: allow clients to book, view, and cancel appointments in real time.
+- Flash-deal notifications: send WhatsApp alerts to subscribed clients when lead-time thresholds are crossed (see FR-18 implementation note).
+- Booking management: allow clients to book, view, and cancel appointments; prices refresh on page load and cron recalculation (no live push subscription in MVP).
 - Waitlist autopilot: automatically notify waitlisted clients of a slot opened by cancellation.
 - Geo-fill: restrict bookings for mobile professionals to geographically feasible locations.
-- Subscription Flex Credits: monthly session plans with an off-peak booking requirement.
+- Subscription Flex Credits: **data model defined** (`subscriptions` table); **API/UI not built** in MVP (see FR-31–33).
 - Heat Map dashboard: allow professionals to set Demand Index values per time slot.
 
 **2.3 User Classes**
@@ -87,11 +87,14 @@ SlotBoost is a standalone web application - not a plugin or module for an existi
 
 **2.4 Operating Environment**
 
-- Frontend: React 18.x PWA, deployed on Vercel, accessible via any modern web browser (Chrome, Firefox, Safari) on desktop or mobile.
-- Backend: Node.js 20 LTS with Express, deployed on Railway.
-- Database: PostgreSQL 16, hosted on Railway.
-- External APIs: Twilio Programmable Messaging API, Google Maps Distance Matrix API.
-- Mobile: PWA installable on Android and iOS home screens without a native app.
+**Original SRS target** described a React PWA with Express on Railway. **Actual MVP implementation:**
+
+- Frontend: Next.js 15 / React 19, mobile-responsive web app on Vercel (not a PWA — no service worker or install manifest).
+- Backend: Next.js App Router API routes (no separate Express server).
+- Database: PostgreSQL via Prisma (`DATABASE_URL` / `DIRECT_URL`).
+- Auth: JWT (`JWT_SECRET`), bcrypt password hashing, httpOnly cookie — `lib/getUser.ts`.
+- External APIs: Twilio WhatsApp sandbox; OSRM + Nominatim for geo (no Google Maps API key).
+- Pricing cron: Vercel cron → `GET /api/pricing/recalculate`, protected by `CRON_SECRET` (`lib/cron-auth.ts`).
 
 **3\. Functional Requirements**
 
@@ -105,14 +108,14 @@ SlotBoost is a standalone web application - not a plugin or module for an existi
 | **FR-04** | **Configure Heat Map** | The system shall provide a Heat Map UI where the professional assigns a Demand Index (DI) value between 0.0 and 1.0 to each hour of the week. |
 | **FR-05** | **Create Slots**       | The system shall allow the professional to create appointment slots with a date, start time, duration, and service type.                      |
 | **FR-06** | **Delete Slots**       | The system shall prevent deletion of a slot that has an active booking. An error message shall be displayed.                                  |
-| **FR-07** | **View Dashboard**     | The system shall display all upcoming slots with their live CurrentPrice, booking status, and waitlist count.                                 |
+| **FR-07** | **View Dashboard**     | The system shall display all upcoming slots with CurrentPrice (computed server-side on each dashboard load), booking status, and waitlist count. |
 
 **3.2 Client Account Management**
 
 | **FR ID** | **Requirement Name**      | **Description**                                                                                                                              |
 | --------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | **FR-08** | **Register Account**      | The system shall allow a client to register with their name, phone number, and email.                                                        |
-| **FR-09** | **Browse Slots**          | The system shall allow a client to view all available slots for a professional, displaying the live CurrentPrice for each slot.              |
+| **FR-09** | **Browse Slots**          | The system shall allow a client to view all available slots for a professional, displaying CurrentPrice computed at request time for each slot. |
 | **FR-10** | **Opt-In to Flash Deals** | The system shall allow a client to subscribe to flash-deal SMS/WhatsApp notifications for a specific professional.                           |
 | **FR-11** | **Opt-Out**               | The system shall allow a client to unsubscribe from a professional's notifications at any time. Removal shall take effect within 60 seconds. |
 | **FR-12** | **Join Waitlist**         | The system shall allow a client to join the waitlist for a fully-booked slot.                                                                |
@@ -126,7 +129,7 @@ SlotBoost is a standalone web application - not a plugin or module for an existi
 | **FR-15** | **Apply D_peak**            | The system shall apply D_peak = 0.15 × (1 − DI) based on the Demand Index configured by the professional for that time slot.                                                  |
 | **FR-16** | **Apply D_cancel**          | The system shall apply D_cancel = 0.15 when a confirmed booking is cancelled within the recovery window (default: 4 hours before slot start).                                 |
 | **FR-17** | **Enforce D_max**           | The system shall ensure D_total never exceeds D_max. If D_lead + D_peak + D_cancel > D_max, D_total shall be capped at D_max.                                                 |
-| **FR-18** | **Trigger Flash-Deal SMS**  | The system shall send a flash-deal SMS/WhatsApp to all subscribed clients when a slot's D_lead first activates (H crosses 24 hrs) and again when H crosses 2 hrs.             |
+| **FR-18** | **Trigger Flash-Deal SMS**  | The system shall send a flash-deal WhatsApp to all subscribed clients when H crosses below 24 hours (D_lead first activates) and again when H crosses below 2 hours. **Implementation:** `lib/flash-deal-trigger.ts` — `shouldSendFlashDealAlert()` returns true when `(previousHours >= 24 && hoursRemaining < 24)` OR `(previousHours >= 2 && hoursRemaining < 2)`; previous hours default to `hoursRemaining + 0.25` (15-min cron interval). Does **not** fire on every price drop within the same lead-time bucket. |
 | **FR-19** | **Price Freeze on Booking** | Once a slot is booked, CurrentPrice shall be frozen at the value at the time of booking. No further discounts shall apply.                                                    |
 
 **3.4 Booking and Cancellation**
@@ -145,23 +148,25 @@ SlotBoost is a standalone web application - not a plugin or module for an existi
 | --------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **FR-25** | **Notify Waitlist on Cancellation** | When a cancellation triggers D_cancel, the system shall immediately send an urgent flash-deal SMS/WhatsApp to all clients on the waitlist for that slot.                              |
 | **FR-26** | **10-Minute Booking Window**        | The discounted price advertised to the waitlist shall be valid for exactly 10 minutes. After expiry, D_cancel shall be removed and CurrentPrice shall revert to D_lead + D_peak only. |
-| **FR-27** | **First-Come-First-Served**         | The first waitlisted client to complete the booking within the 10-minute window shall receive the slot. All other waitlisted clients shall receive a 'slot filled' notification.      |
+| **FR-27** | **First-Come-First-Served**         | The first waitlisted client to complete the booking within the 10-minute window shall receive the slot. Only clients with an existing waitlist entry may use `POST /api/waitlist/book` (others receive 403). Remaining waitlisted clients shall receive a `slot_filled` WhatsApp via `/api/notifications/send`. |
 
 **3.6 Geo-Based Gap Filling**
 
 | **FR ID** | **Requirement Name**            | **Description**                                                                                                                                                                                                                                                           |
 | --------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **FR-28** | **Geo-Check on Booking**        | For mobile professionals, before confirming a booking, the system shall call the Google Maps Distance Matrix API to check if travel time from the professional's previous job location to the client's location is within the configured threshold (default: 30 minutes). |
-| **FR-29** | **Block Out-of-Range Bookings** | If the travel time exceeds the threshold, the system shall block the booking and display: 'This professional is not available in your area for this time slot.'                                                                                                           |
-| **FR-30** | **Fallback on API Error**       | If the Distance Matrix API returns an error or times out, the geo-check shall be skipped and the booking allowed. The error shall be logged for admin review.                                                                                                             |
+| **FR-28** | **Geo-Check on Booking**        | For mobile professionals (`is_mobile`), before confirming a booking, the system shall geocode origin/destination via Nominatim and compute driving time via OSRM (`app/api/geo/check/route.ts`), called from `app/api/slots/book/route.ts`. Threshold: 30 minutes. No Google Maps API key required. |
+| **FR-29** | **Block Out-of-Range Bookings** | If travel time exceeds the threshold, the system shall block the booking and return: 'This professional is not available in your area for this time slot.' (HTTP 403).                                                                                                           |
+| **FR-30** | **Fallback on API Error**       | If Nominatim or OSRM fails, the geo-check shall allow the booking (`allowed: true, fallback: true`). Errors are logged.                                                                                                             |
 
 **3.7 Subscription and Flex Credits**
 
+> **MVP status:** `Subscription` model exists in `prisma/schema.prisma` only. No purchase API, credit consumption, or UI. UC-19/UC-20 are **not functional** in the current codebase.
+
 | **FR ID** | **Requirement Name**             | **Description**                                                                                                                                                                                                          |
 | --------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **FR-31** | **Purchase Subscription**        | The system shall allow a client to purchase a monthly subscription plan (4 sessions). Payment shall be processed via the integrated payment gateway.                                                                     |
-| **FR-32** | **Enforce Off-Peak Requirement** | The system shall enforce that at least 1 of the 4 monthly Flex Credit sessions is booked in a slot with DI < 0.5 (off-peak). Attempting to use all 4 credits on peak slots shall be blocked with an explanatory message. |
-| **FR-33** | **Credit Expiry Notification**   | The system shall send an SMS reminder to the client 3 days before the end of the billing month if any Flex Credits remain unused.                                                                                        |
+| **FR-31** | **Purchase Subscription**        | *(Stretch / not built)* Monthly plan purchase via Razorpay — schema only.                                                                     |
+| **FR-32** | **Enforce Off-Peak Requirement** | *(Stretch / not built)* Off-peak credit rule — schema only. |
+| **FR-33** | **Credit Expiry Notification**   | *(Stretch / not built)* Credit expiry reminder — not implemented.                                                                                        |
 
 **4\. Non-Functional Requirements**
 
@@ -169,7 +174,7 @@ SlotBoost is a standalone web application - not a plugin or module for an existi
 | ---------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **NFR-01** | **Performance**             | The booking page shall load within 3 seconds on a 4G mobile connection. The pricing engine shall recalculate all open slot prices within 60 seconds of a threshold being crossed.                                                           |
 | **NFR-02** | **Availability**            | The system shall target 99% uptime during business hours (6 AM - 10 PM IST). Scheduled maintenance shall occur between 2 AM and 4 AM IST only.                                                                                              |
-| **NFR-03** | **Security**                | All passwords shall be hashed using bcrypt (minimum 12 salt rounds). All API endpoints shall require JWT authentication. Sensitive keys (Twilio, Google Maps) shall be stored as environment variables, never in source code.               |
+| **NFR-03** | **Security**                | Passwords hashed with bcrypt (12 rounds). Protected API routes use JWT httpOnly cookies (`getUserFromRequest`). Cron endpoint requires `CRON_SECRET`. Twilio and DB credentials in env vars only. **Note:** Not all routes require auth (e.g. public booking, notifications/send).               |
 | **NFR-04** | **Scalability**             | The backend shall be stateless (no server-side session storage) so that it can be horizontally scaled by adding additional Railway instances if demand increases.                                                                           |
 | **NFR-05** | **Usability**               | The client booking page shall be usable with one hand on a smartphone screen. All critical actions (view price, book slot, join waitlist) shall require no more than 3 taps.                                                                |
 | **NFR-06** | **Notification Timeliness** | Flash-deal SMS notifications shall be delivered within 60 seconds of a threshold being triggered. Waitlist autopilot messages shall be delivered within 30 seconds of a cancellation.                                                       |
@@ -180,19 +185,19 @@ SlotBoost is a standalone web application - not a plugin or module for an existi
 
 **5.1 Architecture Overview**
 
-SlotBoost follows a three-tier client-server architecture: a React PWA frontend, a Node.js/Express REST API backend, and a PostgreSQL relational database. External services (Twilio and Google Maps) are called from the backend only - never directly from the frontend - to protect API keys.
+**As implemented:** Next.js 15 full-stack app (React UI + App Router API routes) with PostgreSQL via Prisma. External services (Twilio, Nominatim, OSRM) are called from API routes only — not from the browser.
 
 **5.2 Component Diagram (Text Representation)**
 
-| **CLIENT (Browser / PWA)**                                                               |
+| **CLIENT (Browser — mobile-responsive, not PWA)**                                        |
 | ---------------------------------------------------------------------------------------- |
-| React 18 \| Tailwind CSS \| PWA Service Worker                                           |
-| ↕ HTTPS REST API calls                                                                   |
-| **BACKEND (Node.js 20 + Express)**                                                       |
-| Pricing Engine \| Booking API \| Notification Trigger \| Geo-Check Module                |
-| ↕ SQL queries (pg driver) ↕ REST API calls                                               |
-| **DATABASE (PostgreSQL 16 on Railway) EXTERNAL SERVICES**                                |
-| professionals \| slots \| bookings \| clients \| waitlists Twilio API \| Google Maps API |
+| Next.js 15 / React 19 \| Tailwind CSS \| TanStack Query                                  |
+| ↕ HTTPS REST API calls (same Next.js app)                                                |
+| **API ROUTES (app/api/)**                                                                |
+| Pricing cron \| Booking \| Notifications \| Geo (OSRM/Nominatim) \| JWT Auth             |
+| ↕ Prisma ORM ↕ External HTTP APIs                                                        |
+| **DATABASE (PostgreSQL) EXTERNAL SERVICES**                                                |
+| users \| professionals \| slots \| bookings \| clients \| waitlists \| subscribers Twilio WhatsApp \| OSRM \| Nominatim |
 
 **5.3 Database Schema (Core Tables)**
 
@@ -210,7 +215,7 @@ SlotBoost follows a three-tier client-server architecture: a React PWA frontend,
 **6.1 User Interfaces**
 
 - Professional Dashboard: Displays all slots with live CurrentPrice, booking status, waitlist count, and a Heat Map configuration panel. Accessible on desktop and mobile browsers.
-- Client Booking Page: Lists available slots with countdown timers for flash deals. Clients can book, join the waitlist, and manage their Flex Credits.
+- Client Booking Page: Lists available slots with prices computed at load time. Clients can book and join the waitlist. Flex Credits UI is **not built**.
 - Waitlist Autopilot Page: A time-limited booking page (10-minute countdown) accessible via the link in the flash-deal WhatsApp/SMS message.
 
 **6.2 Hardware Interfaces**
@@ -224,14 +229,14 @@ SlotBoost follows a three-tier client-server architecture: a React PWA frontend,
 | ----------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | **Twilio Programmable Messaging**   | REST API (HTTPS POST)   | Send SMS and WhatsApp notifications for flash deals, booking confirmations, reminders, and waitlist autopilot messages. |
 | **Meta WhatsApp Cloud API**         | REST API via Twilio BSP | Deliver rich WhatsApp template messages for high-urgency waitlist autopilot alerts.                                     |
-| **Google Maps Distance Matrix API** | REST API (HTTPS GET)    | Calculate travel time between a professional's last job and a client's location for the geo-fill booking gate.          |
-| **Payment Gateway (Razorpay)**      | REST API + Webhook      | Process subscription payments and issue refunds for cancellations.                                                      |
+| **OSRM + Nominatim (OpenStreetMap)** | Public HTTP APIs       | Geocode addresses and compute driving duration for geo-fill (`app/api/geo/check/route.ts`). No API key.          |
+| **Payment Gateway (Razorpay)**      | REST API + Webhook      | *(Stretch / not built)* Subscription payments and refunds.                                                      |
 
 **6.4 Communication Interfaces**
 
 - All client-server communication shall use HTTPS (TLS 1.2 or higher).
 - REST API responses shall use JSON format with standard HTTP status codes (200, 201, 400, 401, 404, 409, 500).
-- The pricing engine's background job shall run on a 15-minute cron interval using node-cron within the Node.js process.
+- The pricing engine runs on a 15-minute Vercel cron (`vercel.json` → `GET /api/pricing/recalculate`), authenticated with `CRON_SECRET` (`lib/cron-auth.ts`).
 
 **7\. Use Cases**
 
@@ -275,9 +280,9 @@ SlotBoost follows a three-tier client-server architecture: a React PWA frontend,
 **8.1 Constraints**
 
 - The system must be deliverable as a working prototype within 12 weeks (6 Agile sprints of 2 weeks each).
-- The team has a total budget of ₹0 for third-party services - all APIs and hosting must use free tiers during development (Twilio trial, Google Maps \$200/month credit, Vercel hobby, Railway free tier).
+- The team has a total budget of ₹0 for third-party services - development uses free tiers (Twilio trial/sandbox, OSRM/Nominatim, Vercel hobby, PostgreSQL hosting).
 - WhatsApp Business template messages must be approved by Meta before they can be sent to clients outside the Twilio sandbox. Approval typically takes 1-3 business days and must be initiated in Sprint 3 to be ready for Sprint 4.
-- The geo-fill feature requires the client to grant location access in their browser. If permission is denied, the feature is disabled for that booking and the booking proceeds without a geo-check.
+- Geo-fill for mobile professionals requires the client to supply a location/address string in the booking request (`clientLocation`). If geocoding fails, booking is allowed (fallback per FR-30).
 
 **8.2 Assumptions**
 
@@ -294,7 +299,7 @@ SlotBoost follows a three-tier client-server architecture: a React PWA frontend,
 
 **\[3\]** Twilio Inc. (2024). Programmable Messaging - SMS and WhatsApp API Documentation. <https://www.twilio.com/docs/messaging>
 
-**\[4\]** Google LLC. (2024). Distance Matrix API Developer Guide. <https://developers.google.com/maps/documentation/distance-matrix>
+**\[4\]** OpenStreetMap Foundation. Nominatim & OSRM routing (used in MVP geo-check). <https://nominatim.org/> <https://project-osrm.org/>
 
 **\[5\]** PostgreSQL Global Development Group. (2024). PostgreSQL 16 Documentation. <https://www.postgresql.org/docs/16/>
 

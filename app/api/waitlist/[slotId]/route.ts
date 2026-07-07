@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db";
 import { calculatePrice } from "@/lib/pricing";
+import { getDemandIndexFromHeatMap } from "@/lib/heatmap";
 import { NextRequest, NextResponse } from "next/server";
 
 // GET /api/waitlist/[slotId] → get waitlist info + D_cancel countdown
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ slotId: string }> }
+  { params }: { params: Promise<{ slotId: string }> },
 ) {
   const { slotId } = await params;
 
@@ -23,7 +24,11 @@ export async function GET(
   const livePrice = calculatePrice({
     basePrice: slot.professional.base_price,
     startTime: slot.start_time,
-    demandIndex: slot.demand_index,
+    demandIndex: getDemandIndexFromHeatMap(
+      slot.professional.heat_map,
+      slot.start_time,
+      slot.demand_index,
+    ),
     dMax: slot.professional.d_max,
     dCancelActive: slot.d_cancel_active,
     dCancelExpiry: slot.d_cancel_expires_at ?? undefined,
@@ -37,7 +42,12 @@ export async function GET(
     now < slot.d_cancel_expires_at;
 
   const secondsRemaining = offerActive
-    ? Math.max(0, Math.floor((slot.d_cancel_expires_at!.getTime() - now.getTime()) / 1000))
+    ? Math.max(
+        0,
+        Math.floor(
+          (slot.d_cancel_expires_at!.getTime() - now.getTime()) / 1000,
+        ),
+      )
     : 0;
 
   return NextResponse.json({

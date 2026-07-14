@@ -207,18 +207,6 @@ Deploy on [Vercel](https://vercel.com/new):
 
 ---
 
-## 🔍 SEO & GEO Optimization
-
-SlotBoost is optimized for both traditional search engines and AI engine citation (Generative Engine Optimization):
-
-- **Full Next.js Metadata API** — Open Graph, Twitter Cards, canonical URLs
-- **Schema.org JSON-LD** — `WebSite`, `SoftwareApplication`, and `FAQPage` schemas
-- **Dynamic `sitemap.xml`** — all public routes with priority and changefreq
-- **`robots.ts`** — explicitly allows GPTBot, ClaudeBot, PerplexityBot, and Google-Extended
-- **`/llms.txt`** — structured product description for AI engine crawlers
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

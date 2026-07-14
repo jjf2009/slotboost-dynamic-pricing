@@ -1,0 +1,63 @@
+# SlotBoost
+
+> AI-powered dynamic pricing platform for service professionals. Transforms empty appointment slots into revenue using intelligent, time-sensitive discounts.
+
+## What SlotBoost Does
+
+SlotBoost is a SaaS web application that helps service professionals (salons, fitness coaches, physiotherapists, tutors, consultants) automatically fill last-minute appointment cancellations and empty slots using dynamic pricing algorithms and WhatsApp flash deal alerts.
+
+## Key Features
+
+- **Lead-Time Discounts**: Automatically applies discounts (up to 25%) as appointment slots approach their start time.
+- **Peak/Off-Peak Heatmap**: A configurable 7×24 demand index adjusts prices based on your busiest and slowest hours.
+- **Smart D_max Cap**: A configurable maximum discount percentage — SlotBoost never discounts beyond the professional's floor price.
+- **Cancellation Recovery Flash Deals**: When a slot is cancelled, a 15% flash deal window (10 minutes) activates automatically to fill the opening.
+- **Waitlist Autopilot**: Notifies waitlisted clients via WhatsApp (Twilio sandbox) when a slot reopens after cancellation.
+- **Server-Side Pricing Cron**: Prices are recalculated every 15 minutes and computed server-side on each booking action.
+
+## Who Is It For?
+
+Service professionals with bookable time slots who want to:
+- Reduce revenue lost to last-minute cancellations
+- Fill otherwise empty off-peak slots with incentivized pricing
+- Automate client notification and waitlist management
+
+Examples: hair salons, barbershops, yoga studios, personal trainers, physiotherapy clinics, music teachers, life coaches.
+
+## Technology Stack
+
+- **Framework**: Next.js 15 (App Router), React 19
+- **Database**: PostgreSQL via Prisma ORM
+- **Auth**: JWT in httpOnly cookies
+- **Notifications**: Twilio WhatsApp sandbox
+- **Geo Routing**: OSRM + Nominatim (no Maps API key required)
+- **Styling**: Tailwind CSS 4, Shadcn UI
+
+## Pricing
+
+- **Starter (Free)**: Up to 20 slots/month, SMS notifications, basic heatmap, D_max up to 30%
+- **Pro (₹999/month)**: Unlimited slots, SMS + WhatsApp, full heatmap, D_max up to 60%, waitlist autopilot
+
+## How Dynamic Pricing Works (Step-by-Step)
+
+1. Professional sets base price and availability for each appointment slot
+2. Professional configures a 7×24 demand heatmap and a D_max discount cap
+3. Every 15 minutes, the SlotBoost cron recalculates prices for upcoming slots
+4. As a slot's lead time shrinks, the lead-time discount increases (up to 25%)
+5. Heatmap modifier adds or subtracts additional discount based on day/hour demand index
+6. Combined discount is capped at D_max — never going below the professional's floor
+7. Clients see the discounted price in real time; flash deal alerts go out via WhatsApp on cancellations
+
+## Definitions
+
+- **D_max**: Maximum allowed total discount percentage, set by the professional
+- **D_cancel**: Additional cancellation flash deal discount (15%), active for 10 minutes post-cancellation
+- **Lead-Time Discount**: Price reduction applied as the time until appointment decreases
+- **Heatmap Modifier**: Demand-based multiplier from the 7×24 peak/off-peak configuration
+- **Waitlist Autopilot**: Automated WhatsApp notification to queued clients when a slot becomes available
+
+## Links
+
+- **Live App**: https://slotboost-dynamic-pricing.vercel.app
+- **GitHub**: https://github.com/jjf2009/slotboost-dynamic-pricing
+- **Documentation**: See /docs directory for SRS, design doc, and test plan

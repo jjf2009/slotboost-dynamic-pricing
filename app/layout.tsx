@@ -1,14 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
-});
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://slotboost-dynamic-pricing.vercel.app";
 
@@ -185,12 +179,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("h-full scroll-smooth antialiased", inter.variable)}>
-      <head>
-        {/* Preconnect for performance */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      </head>
+    <html lang="en" className={cn("h-full scroll-smooth antialiased")}>
       <body
         className="min-h-full flex flex-col font-sans"
         suppressHydrationWarning={true}

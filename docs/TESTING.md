@@ -20,7 +20,14 @@ npm run test:coverage
 
 # E2E (starts dev server, requires DATABASE_URL)
 npm run test:e2e
+
+# College live demo (seed + production server + headed story)
+npm run demo
+# After first build: npm run demo:fast
+# Seed only: npm run demo:seed
 ```
+
+See **[DEMO_CHEATSHEET.md](DEMO_CHEATSHEET.md)** for fixed logins (`demo.pro@…` / Client A / Client B, phone `8421012788`) and narration steps.
 
 Copy `.env.example` → `.env.local` and fill in at minimum:
 

@@ -60,11 +60,8 @@ export function HeatMapGrid({
 
           {/* Day rows */}
           {DAYS.map((day, dayIndex) => (
-            <>
-              <div
-                key={day}
-                className="text-xs font-semibold flex items-center text-muted-foreground"
-              >
+            <div key={day} className="contents">
+              <div className="text-xs font-semibold flex items-center text-muted-foreground">
                 {day}
               </div>
               {Array.from({ length: 24 }, (_, hour) => {
@@ -73,6 +70,7 @@ export function HeatMapGrid({
                 return (
                   <button
                     key={k}
+                    type="button"
                     className={`h-7 rounded-md transition-all ${getColor(di)} ${
                       selected === k
                         ? "ring-2 ring-foreground ring-offset-1 ring-offset-background scale-110 z-10"
@@ -83,7 +81,7 @@ export function HeatMapGrid({
                   />
                 );
               })}
-            </>
+            </div>
           ))}
         </div>
       </div>

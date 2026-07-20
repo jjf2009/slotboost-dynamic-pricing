@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { Lightning } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
+// Cookie-based auth — never static-prerender
+export const dynamic = "force-dynamic";
+
 export default async function ProfessionalLayout({
   children,
 }: {
